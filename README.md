@@ -68,7 +68,7 @@ A modular, upgradeable smart contract system built on the ERC-2535 Diamond Proxy
 ```bash
 # Clone the repository
 git clone https://github.com/GeniusVentures/gnus-dao.git
-cd gnus-dao-diamond
+cd gnus-dao
 
 # Install dependencies
 yarn install

@@ -5,14 +5,17 @@
   "main": "index.ts",
   "scripts": {
     "test": "npx hardhat test",
-    "clean": "npx hardhat clean",
+    "clean": "npx hardhat clean && rm -rf dist artifacts cache diamond-abi typechain-types diamond-typechain-types",
+    "compile": "npx hardhat compile && npx hardhat diamond:generate-abi-typechain --diamond-name GNUSDAODiamond",
     "diamonds-clean": "rm -rf diamond-typechain-types diamond-abi && npx hardhat clean",
-    "compile": "npx hardhat compile &&  npx ts-node scripts/generate-diamond-abi-with-typechain.ts",
     "coverage": "npx hardhat coverage",
-    "build": "npx tsc && npx hardhat compile && npx ts-node scripts/generate-diamond-abi-with-typechain.ts",
-    "generate-diamond-abi": "npx ts-node scripts/diamond-abi-generator.ts",
-    "generate-diamond-abi-typechain": "npx ts-node scripts/generate-diamond-abi-with-typechain.ts",
-    "diamond-rebuild": "yarn diamonds-clean && yarn generate-diamond-abi-typechain"
+    "build": "npx hardhat compile && npx tsc && npx hardhat diamond:generate-abi-typechain --diamond-name GNUSDAODiamond",
+    "diamond:generate-abi": "npx hardhat diamond:generate-abi --diamond-name GNUSDAODiamond",
+    "diamond:generate-abi-typechain": "npx hardhat diamond:generate-abi-typechain --diamond-name GNUSDAODiamond",
+    "lint": "eslint . --ext .ts,.js --fix",
+    "format": "prettier --write \"**/*.{ts,js,json,md,sol}\"",
+    "precommit": "yarn lint && yarn format && yarn test",
+    "prepare": "husky"
   },
   "authors": [
     "Am0rfu5"
@@ -75,5 +78,5 @@
     "web3": "^4.16.0",
     "winston": "^3.17.0"
   },
-  "packageManager": "yarn@4.9.2"
+  "packageManager": "yarn@4.9.4"
 }
