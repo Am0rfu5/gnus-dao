@@ -62,7 +62,13 @@ yarn sigstore-sign
 yarn sigstore-verify
 
 # Sign specific artifact
-node scripts/sigstore-integration.js sign <artifact-path>
+npx ts-node scripts/devops/sigstore-integration.ts sign <artifact-path>
+
+# Verify specific signature
+npx ts-node scripts/devops/sigstore-integration.ts verify <artifact-path> <signature-file>
+
+# Check Sigstore status
+npx ts-node scripts/devops/sigstore-integration.ts status
 ```
 
 ### Supply Chain Risk Assessment
@@ -273,10 +279,13 @@ node scripts/slsa-attestation.js validate-format
 
 ```bash
 # Check Sigstore status
-node scripts/sigstore-integration.js status
+npx ts-node scripts/devops/sigstore-integration.ts status
 
 # Manual signing
-node scripts/sigstore-integration.js sign <artifact-path>
+npx ts-node scripts/devops/sigstore-integration.ts sign <artifact-path>
+
+# Verify specific signature
+npx ts-node scripts/devops/sigstore-integration.ts verify <artifact-path> <signature-file>
 ```
 
 ### Emergency Procedures
@@ -296,7 +305,7 @@ node scripts/sigstore-integration.js sign <artifact-path>
 node scripts/supply-chain-risk-assessment.js assess --emergency
 
 # Revoke all signatures
-node scripts/sigstore-integration.js revoke-all
+npx ts-node scripts/devops/sigstore-integration.ts revoke-all
 
 # Clean rebuild with provenance checks
 yarn clean && yarn provenance-check && yarn build
