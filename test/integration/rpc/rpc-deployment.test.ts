@@ -27,7 +27,7 @@ describe('RPC Deployment Integration', function () {
 			networkName: 'hardhat',
 			chainId: 31337,
 			rpcUrl: 'http://localhost:8545',
-			privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+			privateKey: process.env.TEST_PRIVATE_KEY!,
 			gasLimitMultiplier: 1.2,
 			maxRetries: 3,
 			retryDelayMs: 1000,

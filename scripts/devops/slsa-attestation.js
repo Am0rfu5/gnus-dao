@@ -337,7 +337,7 @@ class SLSAAttestation {
     }
 
     // Verify builder
-    if (!predicate.runDetails.builder || !predicate.runDetails.builder.id) {
+    if (!predicate.runDetails.builder?.id) {
       throw new Error("Missing builder information");
     }
   }

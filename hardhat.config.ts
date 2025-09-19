@@ -50,6 +50,7 @@ const {
 	BSC_TESTNET_RPC,
 	BSC_TESTNET_BLOCK,
 	TEST_PRIVATE_KEY,
+	PRIVATE_KEY,
 } = process.env;
 
 // default blank RPC URLs will return an error. Must be configured in the .env file.
@@ -105,34 +106,6 @@ function genSignature(name: string, inputs: Array<unknown>, type: string): strin
 		return previous + comma + (key as { internalType: string }).internalType;
 	}, '')})`;
 }
-
-// function filterDuplicateFunctions(
-// 	abiElement: { type: string; name?: string; inputs?: Array<{ internalType: string }> },
-// 	index: number,
-// 	fullAbiL: Array<{
-// 		type: string;
-// 		name?: string;
-// 		inputs?: Array<{ internalType: string }>;
-// 	}>,
-// 	fullyQualifiedName: string,
-// ) {
-// 	if (['function', 'event'].includes(abiElement.type)) {
-// 		const funcSignature = genSignature(
-// 			abiElement.name || '',
-// 			abiElement.inputs || [],
-// 			abiElement.type,
-// 		);
-// 		if (elementSeenSet.has(funcSignature)) {
-// 			return false;
-// 		}
-// 		elementSeenSet.add(funcSignature);
-// 	} else if (abiElement.type === 'fallback') {
-// 		if (!fullyQualifiedName.match('GNUSDAODiamond.sol')) {
-// 			return false;
-// 		}
-// 	}
-// 	return true;
-// }
 
 const MOCK_CHAIN_ID = HH_CHAIN_ID ? parseInt(HH_CHAIN_ID) : 31337;
 // console.log(`Using chain ID: ${MOCK_CHAIN_ID}`);

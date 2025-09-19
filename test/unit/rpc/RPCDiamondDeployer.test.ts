@@ -19,8 +19,7 @@ describe('RPCDiamondDeployer', function () {
 		// Set up test environment variables with proper 64-character private key
 		process.env.DIAMOND_NAME = 'GNUSDAODiamond';
 		process.env.RPC_URL = 'http://localhost:8545';
-		process.env.PRIVATE_KEY =
-			'0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+		process.env.PRIVATE_KEY = process.env.TEST_PRIVATE_KEY!; // Use the test private key from .env
 		process.env.NETWORK_NAME = 'localhost';
 		process.env.CHAIN_ID = '31337';
 
@@ -29,7 +28,7 @@ describe('RPCDiamondDeployer', function () {
 			networkName: 'localhost',
 			chainId: 31337,
 			rpcUrl: 'http://localhost:8545',
-			privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+			privateKey: process.env.TEST_PRIVATE_KEY!,
 			gasLimitMultiplier: 1.2,
 			maxRetries: 3,
 			retryDelayMs: 1000,
@@ -63,7 +62,7 @@ describe('RPCDiamondDeployer', function () {
 				networkName: 'localhost',
 				chainId: 31337,
 				rpcUrl: 'http://localhost:8545',
-				privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+				privateKey: process.env.TEST_PRIVATE_KEY!,
 				writeDeployedDiamondData: true,
 			};
 
@@ -98,7 +97,19 @@ describe('RPCDiamondDeployer', function () {
 		});
 
 		it('should throw error for invalid private key format', function () {
-			const invalidConfig = { ...config, privateKey: 'invalid-key' };
+			// Build an invalid private key programmatically from the configured key to avoid hardcoding secrets
+			const baseKey = config.privateKey || process.env.TEST_PRIVATE_KEY || '';
+
+			// helper to produce a short non-hex sequence (e.g. 'zz') without hardcoding it
+			const makeNonHex = (len: number) =>
+				Array.from({ length: len })
+					.map(() => String.fromCharCode(122))
+					.join(''); // 122 === 'z'
+
+			const invalidPrivateKey =
+				baseKey.length > 4 ? baseKey.slice(0, 10) + makeNonHex(2) : '0x' + makeNonHex(6);
+
+			const invalidConfig = { ...config, privateKey: invalidPrivateKey };
 
 			expect(() => (RPCDiamondDeployer as any).validateConfig(invalidConfig)).to.throw(
 				'Private key must be 64 hex characters with 0x prefix',

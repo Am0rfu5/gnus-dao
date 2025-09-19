@@ -187,7 +187,7 @@ class SecurityAlerting {
    */
   async sendToChannel(channel, severity, alert, rules) {
     const channelConfig = this.config.channels[channel];
-    if (!channelConfig || !channelConfig.enabled) {
+    if (!channelConfig?.enabled) {
       throw new Error(`Channel ${channel} not configured or disabled`);
     }
 

@@ -507,7 +507,7 @@ class SecurityHealthChecks {
           );
 
           // Check for insecure RPC URLs
-          if (config.rpcUrl && config.rpcUrl.startsWith("http://")) {
+          if (config.rpcUrl?.startsWith("http://")) {
             insecureConfigs++;
           }
 

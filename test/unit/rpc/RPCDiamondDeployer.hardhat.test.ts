@@ -60,8 +60,7 @@ describe('RPCDiamondDeployer - Hardhat Integration', function () {
 
 	describe('Configuration Creation from Hardhat', function () {
 		it('should create configuration using hardhat settings', function () {
-			const testPrivateKey =
-				'0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+			const testPrivateKey = process.env.TEST_PRIVATE_KEY!;
 
 			try {
 				const config = RPCDiamondDeployer.createConfigFromHardhat(
@@ -94,8 +93,7 @@ describe('RPCDiamondDeployer - Hardhat Integration', function () {
 		});
 
 		it('should apply configuration overrides', function () {
-			const testPrivateKey =
-				'0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+			const testPrivateKey = process.env.TEST_PRIVATE_KEY!;
 
 			try {
 				const config = RPCDiamondDeployer.createConfigFromHardhat(
@@ -125,6 +123,7 @@ describe('RPCDiamondDeployer - Hardhat Integration', function () {
 	describe('Integration with getInstance', function () {
 		it('should create deployer instance using hardhat configuration', async function () {
 			const testPrivateKey =
+				process.env.TEST_PRIVATE_KEY ||
 				'0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 
 			try {
@@ -154,8 +153,7 @@ describe('RPCDiamondDeployer - Hardhat Integration', function () {
 
 	describe('Deployment Repository Path Resolution', function () {
 		it('should create deployment repository with correct paths', async function () {
-			const testPrivateKey =
-				'0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+			const testPrivateKey = process.env.TEST_PRIVATE_KEY!;
 
 			try {
 				const config = RPCDiamondDeployer.createConfigFromHardhat(

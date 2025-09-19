@@ -350,7 +350,7 @@ class SecurityMetricsDashboard {
     let count = 0;
 
     dates.forEach((date) => {
-      if (metrics[date] && metrics[date][metric]) {
+      if (metrics[date]?.[metric]) {
         const dayTotal = Object.values(metrics[date][metric]).reduce(
           (sum, val) => sum + val,
           0,
