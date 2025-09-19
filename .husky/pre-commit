@@ -1,6 +1,3 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
 # Check for emergency bypass
 if [ "$HUSKY_SKIP_HOOKS" = "1" ] || [ "$EMERGENCY_BYPASS" = "1" ]; then
   echo "🚨 SECURITY HOOKS BYPASSED - EMERGENCY MODE"
