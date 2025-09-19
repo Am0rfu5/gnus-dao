@@ -47,6 +47,7 @@
     "maintenance-automation": "node scripts/maintenance-automation.js",
     "incident-response": "node scripts/incident-response.js",
     "security-health-checks": "node scripts/security-health-checks.js",
+    "security-commit-check": "node scripts/security-commit-check.js",
     "prepare": "husky"
   },
   "authors": [
