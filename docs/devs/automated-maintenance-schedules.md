@@ -552,21 +552,39 @@ This issue was automatically created by the monthly maintenance workflow." \
 ### Health Check Script
 
 ```javascript
-// scripts/health-check.js
-const fs = require('fs');
-const { execSync } = require('child_process');
+### Health Check Script
+
+```typescript
+// scripts/health-check.ts
+import * as fs from 'fs';
+import * as path from 'path';
+import { execSync } from 'child_process';
+
+interface HealthCheckResult {
+  status: 'healthy' | 'warning' | 'error' | 'unknown';
+  details: string;
+}
+
+interface HealthReport {
+  ci: HealthCheckResult;
+  security: HealthCheckResult;
+  dependencies: HealthCheckResult;
+  performance: HealthCheckResult;
+}
 
 class HealthChecker {
+  private results: HealthReport;
+
   constructor() {
     this.results = {
       ci: { status: 'unknown', details: '' },
       security: { status: 'unknown', details: '' },
       dependencies: { status: 'unknown', details: '' },
-      performance: { status: 'unknown', details: '' }
+      performance: { status: 'unknown', details: '' },
     };
   }
 
-  async runChecks() {
+  async runChecks(): Promise<HealthReport> {
     console.log('🏥 Running comprehensive health checks...');
 
     await this.checkCI();
@@ -578,7 +596,7 @@ class HealthChecker {
     return this.results;
   }
 
-  async checkCI() {
+  private async checkCI(): Promise<void> {
     try {
       // Check if CI workflows exist and are valid
       const workflowsDir = '.github/workflows';
@@ -586,16 +604,22 @@ class HealthChecker {
         throw new Error('No workflows directory found');
       }
 
-      const workflows = fs.readdirSync(workflowsDir).filter(f => f.endsWith('.yml'));
+      const workflows = fs
+        .readdirSync(workflowsDir)
+        .filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'));
+
       if (workflows.length === 0) {
         throw new Error('No workflow files found');
       }
 
       // Validate workflow syntax (basic check)
       let validWorkflows = 0;
-      workflows.forEach(workflow => {
+      workflows.forEach((workflow) => {
         try {
-          const content = fs.readFileSync(`${workflowsDir}/${workflow}`, 'utf8');
+          const content = fs.readFileSync(
+            path.join(workflowsDir, workflow),
+            'utf8',
+          );
           if (content.includes('name:') && content.includes('on:')) {
             validWorkflows++;
           }
@@ -606,101 +630,122 @@ class HealthChecker {
 
       this.results.ci = {
         status: validWorkflows === workflows.length ? 'healthy' : 'warning',
-        details: `${validWorkflows}/${workflows.length} workflows valid`
+        details: `${validWorkflows}/${workflows.length} workflows valid`,
       };
-
     } catch (error) {
       this.results.ci = {
         status: 'error',
-        details: error.message
+        details: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
 
-  async checkSecurity() {
+  private async checkSecurity(): Promise<void> {
     try {
       // Run basic security checks
-      const auditResult = execSync('yarn audit --audit-level moderate --json', { encoding: 'utf8' });
+      const auditResult = execSync('yarn audit --audit-level moderate --json', {
+        encoding: 'utf8',
+        timeout: 30000, // 30 second timeout
+      });
+
       const auditData = JSON.parse(auditResult);
+      const vulnerabilities = auditData.metadata?.vulnerabilities || {};
 
-      const vulnerabilities = auditData.metadata.vulnerabilities || {};
-
-      const totalVulns = Object.values(vulnerabilities).reduce((sum, count) => sum + count, 0);
+      const totalVulns = Object.values(vulnerabilities).reduce(
+        (sum: number, count: number) => sum + count,
+        0,
+      );
 
       this.results.security = {
-        status: totalVulns === 0 ? 'healthy' : totalVulns < 5 ? 'warning' : 'error',
-        details: `${totalVulns} vulnerabilities found`
+        status:
+          totalVulns === 0 ? 'healthy' : totalVulns < 5 ? 'warning' : 'error',
+        details: `${totalVulns} vulnerabilities found`,
       };
-
     } catch (error) {
       this.results.security = {
         status: 'error',
-        details: 'Security check failed: ' + error.message
+        details: `Security check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
     }
   }
 
-  async checkDependencies() {
+  private async checkDependencies(): Promise<void> {
     try {
       // Check for outdated dependencies
-      const outdatedResult = execSync('yarn outdated --json', { encoding: 'utf8' });
-      const outdatedData = JSON.parse(outdatedResult);
+      const outdatedResult = execSync('yarn outdated --json', {
+        encoding: 'utf8',
+        timeout: 30000, // 30 second timeout
+      });
 
-      const outdatedCount = outdatedData.data ? outdatedData.data.body.length : 0;
+      const outdatedData = JSON.parse(outdatedResult);
+      const outdatedCount = outdatedData.data
+        ? outdatedData.data.body.length
+        : 0;
 
       this.results.dependencies = {
-        status: outdatedCount === 0 ? 'healthy' : outdatedCount < 10 ? 'warning' : 'error',
-        details: `${outdatedCount} packages outdated`
+        status:
+          outdatedCount === 0
+            ? 'healthy'
+            : outdatedCount < 10
+              ? 'warning'
+              : 'error',
+        details: `${outdatedCount} packages outdated`,
       };
-
     } catch (error) {
       this.results.dependencies = {
         status: 'warning',
-        details: 'Could not check dependencies: ' + error.message
+        details: `Could not check dependencies: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
     }
   }
 
-  async checkPerformance() {
+  private async checkPerformance(): Promise<void> {
     try {
       // Check recent CI performance
-      if (fs.existsSync('ci-performance-dashboard.json')) {
-        const perfData = JSON.parse(fs.readFileSync('ci-performance-dashboard.json', 'utf8'));
-        const alerts = perfData.dashboard.alerts || [];
+      const perfFile = 'ci-performance-dashboard.json';
+      if (fs.existsSync(perfFile)) {
+        const perfData = JSON.parse(
+          fs.readFileSync(perfFile, 'utf8'),
+        );
+        const alerts = perfData.dashboard?.alerts || [];
 
         this.results.performance = {
-          status: alerts.length === 0 ? 'healthy' : alerts.length < 3 ? 'warning' : 'error',
-          details: `${alerts.length} performance alerts`
+          status:
+            alerts.length === 0
+              ? 'healthy'
+              : alerts.length < 3
+                ? 'warning'
+                : 'error',
+          details: `${alerts.length} performance alerts`,
         };
       } else {
         this.results.performance = {
           status: 'warning',
-          details: 'No performance data available'
+          details: 'No performance data available',
         };
       }
-
     } catch (error) {
       this.results.performance = {
         status: 'error',
-        details: 'Performance check failed: ' + error.message
+        details: `Performance check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
     }
   }
 
-  saveReport() {
+  private saveReport(): void {
     const report = {
       timestamp: new Date().toISOString(),
       results: this.results,
-      overall: this.getOverallStatus()
+      overall: this.getOverallStatus(),
     };
 
     fs.writeFileSync('health-report.json', JSON.stringify(report, null, 2));
     console.log('📄 Health report saved to health-report.json');
   }
 
-  getOverallStatus() {
-    const statuses = Object.values(this.results).map(r => r.status);
-    const priorities = { error: 3, warning: 2, healthy: 1, unknown: 0 };
+  private getOverallStatus(): { status: string; summary: string } {
+    const statuses = Object.values(this.results).map((r) => r.status);
+    const priorities: Record<string, number> = { error: 3, warning: 2, healthy: 1, unknown: 0 };
 
     const worstStatus = statuses.reduce((worst, current) => {
       return priorities[current] > priorities[worst] ? current : worst;
@@ -708,12 +753,13 @@ class HealthChecker {
 
     return {
       status: worstStatus,
-      summary: `${statuses.filter(s => s === 'healthy').length}/${statuses.length} checks healthy`
+      summary: `${statuses.filter((s) => s === 'healthy').length}/${statuses.length} checks healthy`,
     };
   }
 }
 
-module.exports = HealthChecker;
+export default HealthChecker;
+```
 ```
 
 ### Maintenance Automation Script

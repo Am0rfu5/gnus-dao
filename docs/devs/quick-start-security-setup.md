@@ -225,7 +225,7 @@ git push origin test-security-setup
 # Test security monitoring scripts
 yarn security:webhook --help
 yarn security:alert --help
-yarn security:health-check
+yarn health-check
 ```
 
 ## Step 6: Complete Onboarding Checklist (10 minutes)

@@ -57,6 +57,16 @@ These instructions guide you, the AI Coding Agent, in completing the GNUS-DAO sm
 ./                               # Git monorepo root
 ├── contracts/                   # Solidity contracts
 │   └── gnus-dao/                # GNUS DAO contracts git submodule
+├── docs/                        # Technical and security documentation
+│   └── devs/
+├── diamond-abi/                 # Diamond ABI files
+├── diamond-typechain-types/     # TypeScript types for diamond contracts
+├── diamonds/                    # Diamond config, deploy & callbacks git submodule
+│   ├── callbacks/               # Deployment callbacks
+│   ├── deployments/             # Deployment records
+│   └── gnusdaodiamond.config.json  # Diamond configuration file
+├── logs/                        # Log files (e.g., emergency bypass logs) 
+├── reports/                     # Test and coverage reports
 ├── scripts/                     # Deployment and utility scripts
 │   ├── deploy/                  # Deployment strategies
 │   │   ├── defender/
@@ -73,14 +83,6 @@ These instructions guide you, the AI Coding Agent, in completing the GNUS-DAO sm
 │   ├── security/                # Security tests
 │   ├── invariant-fuzz/          # Invariant Fuzzing tests
 │   └── utils/                   # Test utilities
-├── docs/                        # Technical and security documentation
-│   └── devs/
-├── diamond-abi/                 # Diamond ABI files
-├── diamond-typechain-types/     # TypeScript types for diamond contracts
-├── diamonds/                    # Diamond config, deploy & callbacks git submodule
-│   ├── callbacks/               # Deployment callbacks
-│   ├── deployments/             # Deployment records
-│   └── gnusdaodiamond.config.json  # Diamond configuration file 
 ├── test-assets/                 # Test assets
 │   ├── test-diamonds/               # Test diamond configurations
 │   └── test-output/                 # Test output files

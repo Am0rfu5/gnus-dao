@@ -43,7 +43,7 @@
     "cost-analyzer": "npx ts-node scripts/devops/cost-analyzer.ts",
     "test-sharding": "node scripts/devops/test-sharding.js",
     "smart-trigger": "node scripts/devops/smart-trigger.js",
-    "health-check": "node scripts/devops/health-check.js",
+    "health-check": "npx ts-node scripts/devops/health-check.ts",
     "maintenance-automation": "node scripts/devops/maintenance-automation.js",
     "incident-response": "node scripts/devops/incident-response.js",
     "security-health-checks": "node scripts/devops/security-health-checks.js",

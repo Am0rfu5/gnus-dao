@@ -427,7 +427,7 @@ This document provides clear, actionable procedures for responding to security i
 
    ```bash
    # Check tool health
-   npm run tools:health-check
+   yarn health-check
    ```
 
 2. **Manual Verification**
