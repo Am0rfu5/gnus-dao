@@ -39,8 +39,7 @@ class SecurityMonitoringWebhook {
   loadConfiguration() {
     return {
       github: {
-        webhookSecret:
-          process.env.GITHUB_WEBHOOK_SECRET || "gnus-dao-webhook-secret",
+        webhookSecret: process.env.GITHUB_WEBHOOK_SECRET,
         appId: process.env.GITHUB_APP_ID,
         privateKey: process.env.GITHUB_PRIVATE_KEY,
       },

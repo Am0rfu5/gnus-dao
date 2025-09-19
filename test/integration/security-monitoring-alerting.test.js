@@ -48,6 +48,7 @@ describe("Security Monitoring and Alerting System", () => {
             "..",
             "..",
             "scripts",
+            "devops",
             "security-monitoring-webhook.js",
           ),
           "process",
@@ -80,6 +81,7 @@ describe("Security Monitoring and Alerting System", () => {
             "..",
             "..",
             "scripts",
+            "devops",
             "security-monitoring-webhook.js",
           ),
           "status",
@@ -105,7 +107,14 @@ describe("Security Monitoring and Alerting System", () => {
       const child = spawn(
         "node",
         [
-          path.join(__dirname, "..", "..", "scripts", "security-alerting.js"),
+          path.join(
+            __dirname,
+            "..",
+            "..",
+            "scripts",
+            "devops",
+            "security-alerting.js",
+          ),
           "test",
         ],
         { cwd: path.join(__dirname, "..", "..") },
@@ -127,7 +136,14 @@ describe("Security Monitoring and Alerting System", () => {
       const child = spawn(
         "node",
         [
-          path.join(__dirname, "..", "..", "scripts", "security-alerting.js"),
+          path.join(
+            __dirname,
+            "..",
+            "..",
+            "scripts",
+            "devops",
+            "security-alerting.js",
+          ),
           "status",
         ],
         { cwd: path.join(__dirname, "..", "..") },
@@ -151,7 +167,14 @@ describe("Security Monitoring and Alerting System", () => {
       const child = spawn(
         "node",
         [
-          path.join(__dirname, "..", "..", "scripts", "incident-response.js"),
+          path.join(
+            __dirname,
+            "..",
+            "..",
+            "scripts",
+            "devops",
+            "incident-response.js",
+          ),
           "create",
           "Test Incident",
           "This is a test incident",
@@ -177,7 +200,14 @@ describe("Security Monitoring and Alerting System", () => {
       const child = spawn(
         "node",
         [
-          path.join(__dirname, "..", "..", "scripts", "incident-response.js"),
+          path.join(
+            __dirname,
+            "..",
+            "..",
+            "scripts",
+            "devops",
+            "incident-response.js",
+          ),
           "list",
         ],
         { cwd: path.join(__dirname, "..", "..") },
@@ -199,7 +229,14 @@ describe("Security Monitoring and Alerting System", () => {
       const child = spawn(
         "node",
         [
-          path.join(__dirname, "..", "..", "scripts", "incident-response.js"),
+          path.join(
+            __dirname,
+            "..",
+            "..",
+            "scripts",
+            "devops",
+            "incident-response.js",
+          ),
           "status",
         ],
         { cwd: path.join(__dirname, "..", "..") },
@@ -228,6 +265,7 @@ describe("Security Monitoring and Alerting System", () => {
             "..",
             "..",
             "scripts",
+            "devops",
             "security-health-checks.js",
           ),
           "check",
@@ -261,6 +299,7 @@ describe("Security Monitoring and Alerting System", () => {
             "..",
             "..",
             "scripts",
+            "devops",
             "security-health-checks.js",
           ),
           "status",
@@ -291,6 +330,7 @@ describe("Security Monitoring and Alerting System", () => {
             "..",
             "..",
             "scripts",
+            "devops",
             "security-metrics-dashboard.js",
           ),
           "generate",
@@ -321,6 +361,7 @@ describe("Security Monitoring and Alerting System", () => {
             "..",
             "..",
             "scripts",
+            "devops",
             "security-metrics-dashboard.js",
           ),
           "status",
@@ -349,19 +390,19 @@ describe("Security Monitoring and Alerting System", () => {
       const scripts = packageJson.scripts;
 
       expect(scripts["security-webhook"]).to.equal(
-        "node scripts/security-monitoring-webhook.js",
+        "node scripts/devops/security-monitoring-webhook.js",
       );
       expect(scripts["security-alerting"]).to.equal(
-        "node scripts/security-alerting.js",
+        "node scripts/devops/security-alerting.js",
       );
       expect(scripts["security-metrics"]).to.equal(
-        "node scripts/security-metrics-dashboard.js",
+        "node scripts/devops/security-metrics-dashboard.js",
       );
       expect(scripts["incident-response"]).to.equal(
-        "node scripts/incident-response.js",
+        "node scripts/devops/incident-response.js",
       );
       expect(scripts["security-health-checks"]).to.equal(
-        "node scripts/security-health-checks.js",
+        "node scripts/devops/security-health-checks.js",
       );
     });
   });
@@ -378,7 +419,14 @@ describe("Security Monitoring and Alerting System", () => {
       ];
 
       scripts.forEach((script) => {
-        const scriptPath = path.join(__dirname, "..", "..", "scripts", script);
+        const scriptPath = path.join(
+          __dirname,
+          "..",
+          "..",
+          "scripts",
+          "devops",
+          script,
+        );
         expect(fs.existsSync(scriptPath)).to.be.true;
       });
     });
@@ -417,7 +465,14 @@ describe("Security Monitoring and Alerting System", () => {
       const createChild = spawn(
         "node",
         [
-          path.join(__dirname, "..", "..", "scripts", "incident-response.js"),
+          path.join(
+            __dirname,
+            "..",
+            "..",
+            "scripts",
+            "devops",
+            "incident-response.js",
+          ),
           "create",
           "E2E Test Incident",
           "End-to-end test incident",
@@ -434,7 +489,14 @@ describe("Security Monitoring and Alerting System", () => {
         const listChild = spawn(
           "node",
           [
-            path.join(__dirname, "..", "..", "scripts", "incident-response.js"),
+            path.join(
+              __dirname,
+              "..",
+              "..",
+              "scripts",
+              "devops",
+              "incident-response.js",
+            ),
             "list",
           ],
           { cwd: path.join(__dirname, "..", "..") },
@@ -458,6 +520,7 @@ describe("Security Monitoring and Alerting System", () => {
                 "..",
                 "..",
                 "scripts",
+                "devops",
                 "security-metrics-dashboard.js",
               ),
               "generate",
@@ -479,6 +542,7 @@ describe("Security Monitoring and Alerting System", () => {
                   "..",
                   "..",
                   "scripts",
+                  "devops",
                   "security-health-checks.js",
                 ),
                 "status",

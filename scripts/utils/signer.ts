@@ -47,7 +47,7 @@ export const updateOwnerForTest = async (rootAddress: string) => {
 	const ownership = (await ethers.getContractAt(
 		'GNUSDAOOwnershipFacet',
 		rootAddress,
-	)) as GNUSDAOOwnershipFacet;
+	)) as unknown as GNUSDAOOwnershipFacet;
 
 	// Retrieve the current owner of the contract
 	const oldOwnerAddress = await ownership.owner();
