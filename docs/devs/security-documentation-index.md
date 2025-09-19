@@ -33,6 +33,7 @@ This comprehensive security documentation covers the complete security CI/CD imp
 ### 🚨 Incident Response
 
 - **[Incident Response Runbooks](./incident-response-runbooks.md)** - Comprehensive procedures for critical, high, medium, and low severity security incidents including Diamond proxy specific scenarios
+- **[Emergency Bypass Tool](./emergency-bypass-tool.md)** - Controlled mechanism for bypassing security hooks in genuine emergency situations
 
 ### 🧪 Security Testing
 
@@ -106,6 +107,7 @@ Security documentation is updated:
 | Tool troubleshooting | Troubleshooting Guides | [./troubleshooting/](./troubleshooting/) |
 | Security review | PR Checklist | [./pr-security-review-checklist.md](./pr-security-review-checklist.md) |
 | Incident response | Incident Response | [./incident-response/](./incident-response/) |
+| Emergency bypass | Emergency Bypass Tool | [./emergency-bypass-tool.md](./emergency-bypass-tool.md) |
 | Diamond security | Diamond Patterns | [./diamond-proxy-security-patterns.md](./diamond-proxy-security-patterns.md) |
 
 ---

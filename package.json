@@ -27,7 +27,7 @@
     "perf-monitor": "node scripts/devops/perf-monitor.js",
     "ci-perf-monitor": "node scripts/devops/ci-perf-monitor.js",
     "sign-artifacts": "node scripts/devops/sign-artifacts.js",
-    "emergency-bypass": "node scripts/devops/emergency-bypass.js",
+    "emergency-bypass": "npx ts-node scripts/devops/emergency-bypass.ts",
     "security-check": "yarn audit && (yarn snyk:test || echo 'Snyk requires authentication - run yarn snyk:test after setup') && (yarn socket:scan || echo 'Socket.dev requires authentication - run yarn socket:scan after setup') && yarn osv:scan && yarn semgrep:scan && yarn git-secrets:scan",
     "security-tool-update": "node scripts/devops/security-tool-updater.js",
     "provenance-check": "node scripts/devops/provenance-validator.js",
