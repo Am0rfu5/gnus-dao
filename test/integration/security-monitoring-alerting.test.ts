@@ -145,9 +145,10 @@ describe('Security Monitoring and Alerting System', () => {
 	describe('Incident Response CLI', () => {
 		it('should create incidents via CLI', (done: Mocha.Done) => {
 			const child: ChildProcess = spawn(
-				'node',
+				'npx',
 				[
-					path.join(__dirname, '..', '..', 'scripts', 'devops', 'incident-response.js'),
+					'ts-node',
+					path.join(__dirname, '..', '..', 'scripts', 'devops', 'incident-response.ts'),
 					'create',
 					'Test Incident',
 					'This is a test incident',
@@ -171,9 +172,10 @@ describe('Security Monitoring and Alerting System', () => {
 
 		it('should list incidents via CLI', (done: Mocha.Done) => {
 			const child: ChildProcess = spawn(
-				'node',
+				'npx',
 				[
-					path.join(__dirname, '..', '..', 'scripts', 'devops', 'incident-response.js'),
+					'ts-node',
+					path.join(__dirname, '..', '..', 'scripts', 'devops', 'incident-response.ts'),
 					'list',
 				],
 				{ cwd: path.join(__dirname, '..', '..') },
@@ -192,9 +194,10 @@ describe('Security Monitoring and Alerting System', () => {
 
 		it('should show incident response status via CLI', (done: Mocha.Done) => {
 			const child: ChildProcess = spawn(
-				'node',
+				'npx',
 				[
-					path.join(__dirname, '..', '..', 'scripts', 'devops', 'incident-response.js'),
+					'ts-node',
+					path.join(__dirname, '..', '..', 'scripts', 'devops', 'incident-response.ts'),
 					'status',
 				],
 				{ cwd: path.join(__dirname, '..', '..') },
@@ -360,7 +363,7 @@ describe('Security Monitoring and Alerting System', () => {
 				'node scripts/devops/security-metrics-dashboard.js',
 			);
 			expect(scripts['incident-response']).to.equal(
-				'node scripts/devops/incident-response.js',
+				'npx ts-node scripts/devops/incident-response.ts',
 			);
 			expect(scripts['security-health-checks']).to.equal(
 				'node scripts/devops/security-health-checks.js',
@@ -374,7 +377,7 @@ describe('Security Monitoring and Alerting System', () => {
 			const scripts: string[] = [
 				'security-monitoring-webhook.js',
 				'security-alerting.js',
-				'incident-response.js',
+				'incident-response.ts',
 				'security-health-checks.js',
 				'security-metrics-dashboard.js',
 			];
@@ -424,9 +427,10 @@ describe('Security Monitoring and Alerting System', () => {
 
 			// Step 1: Create an incident
 			const createChild: ChildProcess = spawn(
-				'node',
+				'npx',
 				[
-					path.join(__dirname, '..', '..', 'scripts', 'devops', 'incident-response.js'),
+					'ts-node',
+					path.join(__dirname, '..', '..', 'scripts', 'devops', 'incident-response.ts'),
 					'create',
 					'E2E Test Incident',
 					'End-to-end test incident',
@@ -441,9 +445,10 @@ describe('Security Monitoring and Alerting System', () => {
 
 				// Step 2: Check that incident was created
 				const listChild: ChildProcess = spawn(
-					'node',
+					'npx',
 					[
-						path.join(__dirname, '..', '..', 'scripts', 'devops', 'incident-response.js'),
+						'ts-node',
+						path.join(__dirname, '..', '..', 'scripts', 'devops', 'incident-response.ts'),
 						'list',
 					],
 					{ cwd: path.join(__dirname, '..', '..') },
