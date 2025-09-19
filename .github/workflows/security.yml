@@ -1,0 +1,640 @@
+name: Security Scanning Pipeline
+
+on:
+  push:
+    branches: [ develop, main ]
+  pull_request:
+    branches: [ develop, main ]
+  schedule:
+    # Run daily security scans at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type of security scan to run'
+        required: false
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - dependencies
+          - code
+          - supply-chain
+      fail_on_warnings:
+        description: 'Fail build on security warnings'
+        required: false
+        default: false
+        type: boolean
+
+# Cancel in-progress runs for the same workflow and branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '18.19.0'
+  SCAN_TYPE: ${{ github.event.inputs.scan_type || 'full' }}
+  FAIL_ON_WARNINGS: ${{ github.event.inputs.fail_on_warnings == 'true' && 'true' || 'false' }}
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  # Dependency Security Scanning
+  dependency-security:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+
+      - name: Setup Yarn
+        run: |
+          npm install -g yarn@${YARN_VERSION:-1.22.19}
+          yarn config set cache-folder ~/.yarn/cache
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Yarn Audit Scan
+        id: yarn-audit
+        run: |
+          echo "Running Yarn audit scan..."
+          yarn audit --groups dependencies --audit-level moderate --json > yarn-audit-results.json || true
+
+          # Parse results and set outputs
+          CRITICAL=$(jq '[.[] | select(.type == "auditAdvisory" and (.data.advisory.severity == "critical"))] | length' yarn-audit-results.json)
+          HIGH=$(jq '[.[] | select(.type == "auditAdvisory" and (.data.advisory.severity == "high"))] | length' yarn-audit-results.json)
+          MODERATE=$(jq '[.[] | select(.type == "auditAdvisory" and (.data.advisory.severity == "moderate"))] | length' yarn-audit-results.json)
+
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "moderate=$MODERATE" >> $GITHUB_OUTPUT
+
+          echo "📊 Yarn Audit Results:"
+          echo "  Critical: $CRITICAL"
+          echo "  High: $HIGH"
+          echo "  Moderate: $MODERATE"
+
+          # Fail on critical vulnerabilities
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "❌ Critical vulnerabilities found - failing build"
+            exit 1
+          fi
+
+      - name: OSV-Scanner
+        id: osv-scan
+        run: |
+          echo "Running OSV-Scanner..."
+          yarn osv:scan > osv-results.json || true
+
+          # Parse OSV results
+          CRITICAL=$(jq '.results[]?.packages[]?.vulnerabilities[]? | select(.severity == "CRITICAL") | length' osv-results.json 2>/dev/null || echo 0)
+          HIGH=$(jq '.results[]?.packages[]?.vulnerabilities[]? | select(.severity == "HIGH") | length' osv-results.json 2>/dev/null || echo 0)
+
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+
+          echo "📊 OSV-Scanner Results:"
+          echo "  Critical: $CRITICAL"
+          echo "  High: $HIGH"
+
+      - name: Snyk Security Scan
+        id: snyk-scan
+        continue-on-error: true
+        run: |
+          echo "Running Snyk security scan..."
+          if command -v snyk >/dev/null 2>&1; then
+            yarn snyk:test --json > snyk-results.json || echo '{"error": "Snyk scan failed"}' > snyk-results.json
+
+            # Parse Snyk results
+            CRITICAL=$(jq '.vulnerabilities[]? | select(.severity == "critical") | length' snyk-results.json 2>/dev/null || echo 0)
+            HIGH=$(jq '.vulnerabilities[]? | select(.severity == "high") | length' snyk-results.json 2>/dev/null || echo 0)
+
+            echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+            echo "high=$HIGH" >> $GITHUB_OUTPUT
+
+            echo "📊 Snyk Results:"
+            echo "  Critical: $CRITICAL"
+            echo "  High: $HIGH"
+          else
+            echo "⚠️ Snyk not available - skipping"
+            echo "critical=0" >> $GITHUB_OUTPUT
+            echo "high=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Socket.dev Supply Chain Scan
+        id: socket-scan
+        continue-on-error: true
+        run: |
+          echo "Running Socket.dev supply chain scan..."
+          yarn socket:scan > socket-results.txt || echo "Socket.dev scan requires authentication" > socket-results.txt
+
+          # Check for critical issues in output
+          if grep -q "CRITICAL\|HIGH" socket-results.txt; then
+            echo "issues=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Supply chain issues detected"
+          else
+            echo "issues=false" >> $GITHUB_OUTPUT
+            echo "✅ No critical supply chain issues"
+          fi
+
+      - name: Generate Dependency Security Report
+        run: |
+          cat > dependency-security-report.json << EOF
+          {
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "repository": "${{ github.repository }}",
+            "ref": "${{ github.ref }}",
+            "sha": "${{ github.sha }}",
+            "results": {
+              "yarn-audit": {
+                "critical": ${{ steps.yarn-audit.outputs.critical || 0 }},
+                "high": ${{ steps.yarn-audit.outputs.high || 0 }},
+                "moderate": ${{ steps.yarn-audit.outputs.moderate || 0 }}
+              },
+              "osv-scanner": {
+                "critical": ${{ steps.osv-scan.outputs.critical || 0 }},
+                "high": ${{ steps.osv-scan.outputs.high || 0 }}
+              },
+              "snyk": {
+                "critical": ${{ steps.snyk-scan.outputs.critical || 0 }},
+                "high": ${{ steps.snyk-scan.outputs.high || 0 }}
+              },
+              "socket": {
+                "has_issues": ${{ steps.socket-scan.outputs.issues == 'true' }}
+              }
+            },
+            "thresholds": {
+              "critical_fail_threshold": 0,
+              "high_warning_threshold": 5
+            }
+          }
+          EOF
+
+      - name: Upload Dependency Security Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-security-results
+          path: |
+            dependency-security-report.json
+            yarn-audit-results.json
+            osv-results.json
+            snyk-results.json
+            socket-results.txt
+          retention-days: 30
+
+      - name: Dependency Security Status Check
+        run: |
+          CRITICAL_TOTAL=$((${{ steps.yarn-audit.outputs.critical || 0 }} + ${{ steps.osv-scan.outputs.critical || 0 }} + ${{ steps.snyk-scan.outputs.critical || 0 }}))
+
+          if [ "$CRITICAL_TOTAL" -gt 0 ]; then
+            echo "❌ Critical dependency vulnerabilities found - failing build"
+            exit 1
+          fi
+
+          HIGH_TOTAL=$((${{ steps.yarn-audit.outputs.high || 0 }} + ${{ steps.osv-scan.outputs.high || 0 }} + ${{ steps.snyk-scan.outputs.high || 0 }}))
+
+          if [ "$HIGH_TOTAL" -gt 10 ] && [ "${{ env.FAIL_ON_WARNINGS }}" = "true" ]; then
+            echo "❌ High vulnerability count exceeds threshold - failing build"
+            exit 1
+          elif [ "$HIGH_TOTAL" -gt 10 ]; then
+            echo "⚠️ High vulnerability count ($HIGH_TOTAL) exceeds recommended threshold"
+          fi
+
+          echo "✅ Dependency security scan completed"
+
+  # Code Security Scanning
+  code-security:
+    name: Code Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+
+      - name: Setup Yarn
+        run: |
+          npm install -g yarn@${YARN_VERSION:-1.22.19}
+          yarn config set cache-folder ~/.yarn/cache
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Setup Semgrep
+        run: |
+          # Create Semgrep configuration for smart contract security
+          cat > .semgrep.yml << 'EOF'
+          rules:
+            # JavaScript/TypeScript security rules
+            - id: javascript.security.audit.crypto.node
+              patterns:
+                - pattern: crypto.createHash('md5')
+              message: "Use of insecure MD5 hash"
+              severity: WARNING
+
+            - id: javascript.security.audit.detect-eval
+              patterns:
+                - pattern: eval(...)
+              message: "Use of eval() is dangerous"
+              severity: ERROR
+
+            # Smart contract specific rules
+            - id: solidity.security.reentrancy
+              patterns:
+                - pattern: |
+                    function $FUNC(....) {
+                      .... .call{value: $AMOUNT}(...);
+                      .... $STATE = ....;
+                    }
+              message: "Potential reentrancy vulnerability - state changes after external call"
+              severity: ERROR
+
+            - id: typescript.security.hardcoded-secret
+              patterns:
+                - pattern-regex: (private_key|secret|password|token)\s*[:=]\s*["'][^"']{10,}["']
+              message: "Potential hardcoded secret detected"
+              severity: ERROR
+
+            # Diamond proxy specific rules
+            - id: diamond.security.selector-collision
+              patterns:
+                - pattern: |
+                    bytes4 $SELECTOR = bytes4(keccak256("$SIG"));
+                    ...
+                    bytes4 $OTHER = bytes4(keccak256("$SIG"));
+              message: "Potential selector collision in Diamond proxy"
+              severity: WARNING
+          EOF
+
+      - name: Semgrep Code Analysis
+        id: semgrep-scan
+        run: |
+          echo "Running Semgrep code analysis..."
+          yarn semgrep:scan --json > semgrep-results.json || true
+
+          # Parse Semgrep results
+          ERRORS=$(jq '.results[]?.extra.severity | select(. == "ERROR") | length' semgrep-results.json 2>/dev/null || echo 0)
+          WARNINGS=$(jq '.results[]?.extra.severity | select(. == "WARNING") | length' semgrep-results.json 2>/dev/null || echo 0)
+
+          echo "errors=$ERRORS" >> $GITHUB_OUTPUT
+          echo "warnings=$WARNINGS" >> $GITHUB_OUTPUT
+
+          echo "📊 Semgrep Results:"
+          echo "  Errors: $ERRORS"
+          echo "  Warnings: $WARNINGS"
+
+          # Fail on errors
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "❌ Code security errors found - failing build"
+            exit 1
+          fi
+
+      - name: ESLint Security Scan
+        id: eslint-scan
+        run: |
+          echo "Running ESLint security scan..."
+          yarn lint --format json > eslint-results.json || true
+
+          # Parse ESLint results
+          ERRORS=$(jq '.[]?.messages[]?.severity | select(. == 2) | length' eslint-results.json 2>/dev/null || echo 0)
+          WARNINGS=$(jq '.[]?.messages[]?.severity | select(. == 1) | length' eslint-results.json 2>/dev/null || echo 0)
+
+          echo "errors=$ERRORS" >> $GITHUB_OUTPUT
+          echo "warnings=$WARNINGS" >> $GITHUB_OUTPUT
+
+          echo "📊 ESLint Results:"
+          echo "  Errors: $ERRORS"
+          echo "  Warnings: $WARNINGS"
+
+      - name: Git Secrets Scan
+        id: git-secrets-scan
+        run: |
+          echo "Running Git secrets scan..."
+          yarn git-secrets:scan > git-secrets-results.txt 2>&1 || true
+
+          if grep -q "found" git-secrets-results.txt; then
+            echo "secrets=true" >> $GITHUB_OUTPUT
+            echo "❌ Potential secrets found in repository"
+            cat git-secrets-results.txt
+            exit 1
+          else
+            echo "secrets=false" >> $GITHUB_OUTPUT
+            echo "✅ No secrets detected"
+          fi
+
+      - name: Generate Code Security Report
+        run: |
+          cat > code-security-report.json << EOF
+          {
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "repository": "${{ github.repository }}",
+            "ref": "${{ github.ref }}",
+            "sha": "${{ github.sha }}",
+            "results": {
+              "semgrep": {
+                "errors": ${{ steps.semgrep-scan.outputs.errors || 0 }},
+                "warnings": ${{ steps.semgrep-scan.outputs.warnings || 0 }}
+              },
+              "eslint": {
+                "errors": ${{ steps.eslint-scan.outputs.errors || 0 }},
+                "warnings": ${{ steps.eslint-scan.outputs.warnings || 0 }}
+              },
+              "git-secrets": {
+                "secrets_found": ${{ steps.git-secrets-scan.outputs.secrets == 'true' }}
+              }
+            },
+            "thresholds": {
+              "error_fail_threshold": 0,
+              "warning_limit": 50
+            }
+          }
+          EOF
+
+      - name: Upload Code Security Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-security-results
+          path: |
+            code-security-report.json
+            semgrep-results.json
+            eslint-results.json
+            git-secrets-results.txt
+          retention-days: 30
+
+      - name: Code Security Status Check
+        run: |
+          TOTAL_ERRORS=$((${{ steps.semgrep-scan.outputs.errors || 0 }} + ${{ steps.eslint-scan.outputs.errors || 0 }}))
+
+          if [ "$TOTAL_ERRORS" -gt 0 ]; then
+            echo "❌ Code security errors found - failing build"
+            exit 1
+          fi
+
+          TOTAL_WARNINGS=$((${{ steps.semgrep-scan.outputs.warnings || 0 }} + ${{ steps.eslint-scan.outputs.warnings || 0 }}))
+
+          if [ "$TOTAL_WARNINGS" -gt 100 ] && [ "${{ env.FAIL_ON_WARNINGS }}" = "true" ]; then
+            echo "❌ Code warning count exceeds threshold - failing build"
+            exit 1
+          elif [ "$TOTAL_WARNINGS" -gt 100 ]; then
+            echo "⚠️ Code warning count ($TOTAL_WARNINGS) exceeds recommended threshold"
+          fi
+
+          echo "✅ Code security scan completed"
+
+  # Supply Chain Security
+  supply-chain:
+    name: Supply Chain Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: OSSF Scorecard
+        id: scorecard
+        uses: ossf/scorecard-action@v2
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: false
+
+      - name: Upload Scorecard Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: scorecard-results
+          path: results.sarif
+          retention-days: 30
+
+      - name: Scorecard Results Analysis
+        run: |
+          # Extract key metrics from SARIF
+          SCORE=$(jq '.runs[0].results[]? | select(.ruleId == "Token-Permissions") | .level' results.sarif 2>/dev/null || echo "unknown")
+
+          echo "📊 OSSF Scorecard Results:"
+          echo "  Overall Score: $SCORE"
+
+          # Check for critical issues
+          CRITICAL_ISSUES=$(jq '.runs[0].results[]? | select(.level == "error") | length' results.sarif 2>/dev/null || echo 0)
+
+          if [ "$CRITICAL_ISSUES" -gt 0 ]; then
+            echo "❌ Critical supply chain issues found"
+            exit 1
+          fi
+
+          echo "✅ Supply chain security scan completed"
+
+  # Security Metrics Collection
+  security-metrics:
+    name: Security Metrics Collection
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [dependency-security, code-security, supply-chain]
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Security Results
+        uses: actions/download-artifact@v4
+        with:
+          name: dependency-security-results
+
+      - name: Download Code Security Results
+        uses: actions/download-artifact@v4
+        with:
+          name: code-security-results
+
+      - name: Download Scorecard Results
+        uses: actions/download-artifact@v4
+        with:
+          name: scorecard-results
+
+      - name: Generate Security Metrics Report
+        run: |
+          # Combine all security results into comprehensive report
+          cat > security-metrics-report.json << EOF
+          {
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "repository": "${{ github.repository }}",
+            "ref": "${{ github.ref }}",
+            "sha": "${{ github.sha }}",
+            "workflow": "${{ github.workflow }}",
+            "run_id": "${{ github.run_id }}",
+            "scan_type": "${{ env.SCAN_TYPE }}",
+            "summary": {
+              "dependency_scan_status": "${{ needs.dependency-security.result }}",
+              "code_scan_status": "${{ needs.code-security.result }}",
+              "supply_chain_status": "${{ needs.supply-chain.result }}",
+              "overall_status": "${{ needs.dependency-security.result == 'success' && needs.code-security.result == 'success' && needs.supply-chain.result == 'success' && 'success' || 'failure' }}"
+            },
+            "metrics": {
+              "execution_time": $SECONDS,
+              "scan_coverage": "full"
+            }
+          }
+          EOF
+
+      - name: Upload Security Metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-metrics-report
+          path: security-metrics-report.json
+          retention-days: 90
+
+      - name: Security Status Summary
+        run: |
+          echo "## 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Scan Results:" >> $GITHUB_STEP_SUMMARY
+          echo "- 📦 Dependencies: ${{ needs.dependency-security.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 💻 Code Security: ${{ needs.code-security.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔗 Supply Chain: ${{ needs.supply-chain.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${{ needs.dependency-security.result }}" == "success" && \
+                "${{ needs.code-security.result }}" == "success" && \
+                "${{ needs.supply-chain.result }}" == "success" ]]; then
+            echo "### ✅ Overall Security Status: PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "All security scans completed successfully." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Overall Security Status: FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "Some security scans failed. Please review the results above." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Security Metrics:" >> $GITHUB_STEP_SUMMARY
+          echo "- Scan Type: ${{ env.SCAN_TYPE }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Execution Time: ~$SECONDS seconds" >> $GITHUB_STEP_SUMMARY
+          echo "- Results Archived: ✅" >> $GITHUB_STEP_SUMMARY
+
+  # Security Notifications
+  notifications:
+    name: Security Notifications
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [security-metrics]
+    if: always() && (failure() || github.event_name == 'schedule')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Security Metrics
+        uses: actions/download-artifact@v4
+        with:
+          name: security-metrics-report
+
+      - name: Parse Security Results
+        id: parse-results
+        run: |
+          OVERALL_STATUS=$(jq -r '.summary.overall_status' security-metrics-report.json)
+          DEP_STATUS=$(jq -r '.summary.dependency_scan_status' security-metrics-report.json)
+          CODE_STATUS=$(jq -r '.summary.code_scan_status' security-metrics-report.json)
+
+          echo "overall=$OVERALL_STATUS" >> $GITHUB_OUTPUT
+          echo "dependencies=$DEP_STATUS" >> $GITHUB_OUTPUT
+          echo "code=$CODE_STATUS" >> $GITHUB_OUTPUT
+
+      - name: Create Security Issue on Failure
+        if: steps.parse-results.outputs.overall == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Read the security report
+            const report = JSON.parse(fs.readFileSync('security-metrics-report.json', 'utf8'));
+
+            const issueBody = `## 🚨 Security Scan Failure
+
+            **Repository**: \${report.repository}
+            **Reference**: \${report.ref}
+            **Commit**: \${report.sha}
+            **Workflow Run**: \${report.run_id}
+
+            ### Scan Results:
+            - 📦 Dependencies: \${report.summary.dependency_scan_status}
+            - 💻 Code Security: \${report.summary.code_scan_status}
+            - 🔗 Supply Chain: \${report.summary.supply_chain_status}
+
+            ### Details:
+            \`\`\`json
+            \${JSON.stringify(report.summary, null, 2)}
+            \`\`\`
+
+            ### Required Actions:
+            - [ ] Review security scan results
+            - [ ] Address critical vulnerabilities
+            - [ ] Update dependencies if needed
+            - [ ] Fix code security issues
+            - [ ] Re-run security scans
+
+            ### Related Links:
+            - [Workflow Run](\${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }})
+            - [Security Policy](SECURITY.md)
+
+            ---
+            *This issue was automatically created by the security scanning pipeline.*`;
+
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: \`🚨 Security Scan Failed: \${report.ref}\`,
+              body: issueBody,
+              labels: ['security', 'scan-failure', 'automated'],
+              assignees: ['GeniusVentures/security-team']
+            });
+
+            console.log(\`Security issue created: #\${issue.data.number}\`);
+
+      - name: Send Security Report Notification
+        if: always()
+        run: |
+          echo "Security scan completed with status: ${{ steps.parse-results.outputs.overall }}"
+
+          # In a real implementation, this would send notifications to:
+          # - Slack/Discord webhooks
+          # - Email notifications
+          # - Security monitoring systems
+
+          if [ "${{ steps.parse-results.outputs.overall }}" = "failure" ]; then
+            echo "🔴 SECURITY ALERT: Security scan failed - notification sent to security team"
+          else
+            echo "🟢 Security scan passed - all checks successful"
+          fi

@@ -1,0 +1,33 @@
+name: "CodeQL Configuration"
+
+disable-default-queries: false
+
+queries:
+  - uses: security-and-quality
+  - uses: security-experimental
+
+paths-ignore:
+  - node_modules
+  - artifacts
+  - cache
+  - coverage
+  - diamond-abi
+  - diamond-typechain-types
+  - typechain-types
+  - test-assets
+  - docs
+  - .husky/_
+  - .vscode
+
+paths:
+  - contracts
+  - scripts
+  - test
+  - hardhat.config.ts
+  - .github/workflows
+
+query-filters:
+  - exclude:
+      problem.severity:
+        - warning
+        - recommendation

@@ -1,0 +1,11 @@
+{
+  "*.{ts,js}": [
+    "prettier --write --cache"
+  ],
+  "*.{ts,js,json,md}": [
+    "git secrets --scan"
+  ],
+  "*.sol": [
+    "semgrep scan --config .semgrep.yml --error --cache"
+  ]
+}

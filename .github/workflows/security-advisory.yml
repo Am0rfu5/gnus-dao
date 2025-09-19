@@ -1,0 +1,113 @@
+name: Security Advisory Management
+
+on:
+  workflow_dispatch:
+    inputs:
+      severity:
+        description: 'Severity level'
+        required: true
+        default: 'moderate'
+        type: choice
+        options:
+          - critical
+          - high
+          - moderate
+          - low
+      title:
+        description: 'Advisory title'
+        required: true
+        type: string
+      description:
+        description: 'Advisory description'
+        required: true
+        type: string
+      affected_versions:
+        description: 'Affected version range (e.g., >=1.0.0, <1.2.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  create-advisory:
+    name: Create Security Advisory
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create GitHub Security Advisory
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { severity, title, description, affected_versions } = context.payload.inputs;
+            
+            try {
+              // Create the security advisory
+              const advisory = await github.rest.securityAdvisories.createRepositoryAdvisory({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                description: description,
+                severity: severity,
+                vulnerabilities: [{
+                  package: {
+                    ecosystem: "npm",
+                    name: "gnus-dao"
+                  },
+                  vulnerable_version_range: affected_versions,
+                  first_patched_version: {
+                    identifier: "TBD"
+                  }
+                }],
+                cwe_ids: [],
+                credits: [{
+                  login: context.actor,
+                  type: "reporter"
+                }]
+              });
+              
+              console.log('Security advisory created: ' + advisory.data.ghsa_id);
+              
+              // Create tracking issue
+              const issueBody = '## Security Advisory Tracking\\n\\n' +
+                '**Advisory ID**: ' + advisory.data.ghsa_id + '\\n' +
+                '**Severity**: ' + severity + '\\n' +
+                '**Status**: Draft\\n\\n' +
+                '### Description\\n' + description + '\\n\\n' +
+                '### Affected Versions\\n' + affected_versions + '\\n\\n' +
+                '### Tasks\\n' +
+                '- [ ] Security fix implementation\\n' +
+                '- [ ] Test coverage for fix\\n' +
+                '- [ ] Documentation updates\\n' +
+                '- [ ] Release preparation\\n' +
+                '- [ ] User communication\\n' +
+                '- [ ] Advisory publication\\n\\n' +
+                '### Related Links\\n' +
+                '- [GitHub Advisory](' + advisory.data.html_url + ')\\n' +
+                '- [Security Policy](https://github.com/GeniusVentures/gnus-dao/blob/main/SECURITY.md)\\n\\n' +
+                '---\\n' +
+                '*This issue tracks the resolution of security advisory ' + advisory.data.ghsa_id + '*';
+              
+              const issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🔒 Security Advisory: ' + title,
+                body: issueBody,
+                labels: ['security', 'advisory', severity],
+                assignees: ['GeniusVentures/security-team']
+              });
+              
+              console.log('Tracking issue created: #' + issue.data.number);
+              
+            } catch (error) {
+              console.error('Failed to create security advisory:', error);
+              process.exit(1);
+            }

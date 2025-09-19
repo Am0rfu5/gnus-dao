@@ -37,10 +37,10 @@ const {
 	POLYGON_BLOCK,
 	POLYGON_AMOY_RPC,
 	POLYGON_AMOY_BLOCK,
-  ARBITRUM_RPC,
-  ARBITRUM_BLOCK,
-  ARBITRUM_SEPOLIA_RPC,
-  ARBITRUM_SEPOLIA_BLOCK,
+	ARBITRUM_RPC,
+	ARBITRUM_BLOCK,
+	ARBITRUM_SEPOLIA_RPC,
+	ARBITRUM_SEPOLIA_BLOCK,
 	BASE_RPC,
 	BASE_BLOCK,
 	BASE_SEPOLIA_RPC,
@@ -49,7 +49,7 @@ const {
 	BSC_BLOCK,
 	BSC_TESTNET_RPC,
 	BSC_TESTNET_BLOCK,
-  TEST_PRIVATE_KEY,
+	TEST_PRIVATE_KEY,
 } = process.env;
 
 // default blank RPC URLs will return an error. Must be configured in the .env file.
@@ -151,7 +151,8 @@ const config: HardhatUserConfig = {
 			},
 		},
 	},
-	chainManager: {  // Multichain configuration
+	chainManager: {
+		// Multichain configuration
 		chains: {
 			mainnet: {
 				rpcUrl: mainnetUrl,
@@ -174,14 +175,14 @@ const config: HardhatUserConfig = {
 			hardhat: {
 				rpcUrl: multichainHardhat,
 			},
-      arbitrum: {
-        rpcUrl: arbitrumUrl,
-        blockNumber: arbitrumBlock,
-      },
-      arbitrum_sepolia: {
-        rpcUrl: arbitrumSepoliaUrl,
-        blockNumber: arbitrumSepoliaBlock,
-      },
+			arbitrum: {
+				rpcUrl: arbitrumUrl,
+				blockNumber: arbitrumBlock,
+			},
+			arbitrum_sepolia: {
+				rpcUrl: arbitrumSepoliaUrl,
+				blockNumber: arbitrumSepoliaBlock,
+			},
 			base: {
 				rpcUrl: baseUrl,
 				blockNumber: baseBlock,
@@ -210,10 +211,10 @@ const config: HardhatUserConfig = {
 							: undefined,
 					}
 				: undefined,
-        /* hardhat-multichain config  */
-        chainId: MOCK_CHAIN_ID, // Sets the chain ID for the Hardhat network
-        // Chains without Hardhat built in definitions
-        chains: {     
+			/* hardhat-multichain config  */
+			chainId: MOCK_CHAIN_ID, // Sets the chain ID for the Hardhat network
+			// Chains without Hardhat built in definitions
+			chains: {
 				80002: {
 					hardforkHistory: {
 						london: 10000000,
@@ -261,16 +262,16 @@ const config: HardhatUserConfig = {
 			accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
 			timeout: 100000,
 		},
-    arbitrum: {
-      url: arbitrumUrl,
-      chainId: 42161,
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-    },
-    arbitrum_sepolia: {
-      url: arbitrumSepoliaUrl,
-      chainId: 421614,
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-    },
+		arbitrum: {
+			url: arbitrumUrl,
+			chainId: 42161,
+			accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+		},
+		arbitrum_sepolia: {
+			url: arbitrumSepoliaUrl,
+			chainId: 421614,
+			accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+		},
 		base_sepolia: {
 			url: baseSepoliaUrl,
 			chainId: 84532,
@@ -384,8 +385,8 @@ const config: HardhatUserConfig = {
 		paths: {
 			GNUSDAODiamond: {
 				deploymentsPath: 'diamonds',
-        // It is recommended but not required to create a separate contracts repo and 
-        // include it as a git submodule.
+				// It is recommended but not required to create a separate contracts repo and
+				// include it as a git submodule.
 				contractsPath: 'contracts/gnus-dao',
 			},
 		},

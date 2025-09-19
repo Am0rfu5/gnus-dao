@@ -469,7 +469,67 @@ yarn compile
 yarn test
 ```
 
-## 📄 License
+## � Security
+
+This project implements comprehensive local security checks to ensure code and dependencies are secure before pushing to GitHub.
+
+### Local Security Tools Setup
+
+Install the following global tools for dependency and code scanning:
+
+```bash
+# Snyk CLI (free for open source)
+npm install -g snyk
+snyk auth  # Authenticate with free account
+
+# Socket.dev CLI
+npm install -g @socketsecurity/cli
+
+# OSV-Scanner (requires Go)
+go install github.com/google/ossf/osv-scanner/cmd/osv-scanner@latest
+
+# Semgrep (requires Python)
+pip install semgrep
+
+# Sigstore CLI (for provenance validation)
+pip install sigstore
+```
+
+### Security Scripts
+
+Run these scripts regularly to scan for vulnerabilities:
+
+- `yarn audit` - Check dependencies for known CVEs
+- `yarn depcheck` - Identify unused packages
+- `yarn snyk:test` - Scan dependencies with Snyk
+- `yarn socket:scan` - Detect supply chain risks
+- `yarn osv:scan` - Check OSV database vulnerabilities
+- `yarn semgrep:scan` - Static analysis for code vulnerabilities
+- `yarn security-check` - Run all security scans
+
+### Pre-commit Hooks
+
+The project uses Husky and lint-staged for pre-commit checks:
+
+- Lints and formats staged files
+- Runs dependency audit
+- Executes tests
+
+To set up hooks after cloning:
+
+```bash
+yarn install
+yarn prepare  # Sets up Husky
+```
+
+### Secure Dependency Management
+
+- Use `yarn install --frozen-lockfile` for reproducible builds
+- Regularly audit and update dependencies
+- Minimize dependencies to reduce attack surface
+
+## �📄 License
+
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 

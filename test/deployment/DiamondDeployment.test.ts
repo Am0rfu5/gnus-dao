@@ -70,13 +70,15 @@ describe('🧪 Multichain Fork and Diamond Deployment Tests', async function () 
 				diamond = await diamondDeployer.getDiamondDeployed();
 				const deployedDiamondData = diamond.getDeployedDiamondData();
 
-        let geniusDiamondPlain: GNUSDAODiamond;
-        
-        
+				let geniusDiamondPlain: GNUSDAODiamond;
+
 				let geniusDiamondContract: GNUSDAODiamond;
-				
+
 				// Load the Diamond contract using the utility function
-				geniusDiamondContract = await loadDiamondContract<GNUSDAODiamond>(diamond, deployedDiamondData.DiamondAddress!);
+				geniusDiamondContract = await loadDiamondContract<GNUSDAODiamond>(
+					diamond,
+					deployedDiamondData.DiamondAddress!,
+				);
 				geniusDiamond = geniusDiamondContract;
 
 				ethersMultichain = ethers;

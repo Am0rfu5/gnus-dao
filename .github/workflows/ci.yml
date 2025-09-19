@@ -1,0 +1,585 @@
+name: CI Pipeline - Build and Test
+
+on:
+  push:
+    branches: [ develop, main ]
+  pull_request:
+    branches: [ develop, main ]
+  workflow_dispatch:
+    inputs:
+      test_networks:
+        description: 'Comma-separated list of networks to test (default: hardhat,sepolia)'
+        required: false
+        default: 'hardhat,sepolia'
+        type: string
+      skip_coverage:
+        description: 'Skip test coverage analysis'
+        required: false
+        default: false
+        type: boolean
+
+# Cancel in-progress runs for the same workflow and branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '18.19.0'
+  YARN_VERSION: '1.22.19'
+  HARDHAT_CACHE_DIR: ~/.hardhat/cache
+  YARN_CACHE_DIR: ~/.yarn/cache
+
+jobs:
+  # Security and dependency checks
+  security-check:
+    name: Security & Dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+
+      - name: Setup Yarn
+        run: |
+          npm install -g yarn@${{ env.YARN_VERSION }}
+          yarn set version ${{ env.YARN_VERSION }}
+
+      - name: Configure Yarn cache
+        run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Run security checks
+        run: yarn security-check
+        continue-on-error: false
+
+      - name: Audit dependencies
+        run: yarn audit --groups dependencies --audit-level moderate
+        continue-on-error: true
+
+      - name: Check for dependency changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "Checking for dependency changes in PR..."
+            git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E "(package\.json|yarn\.lock)" || echo "No dependency changes detected"
+          fi
+
+  # Build and compile contracts
+  build:
+    name: Build & Compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: security-check
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+
+      - name: Setup Yarn
+        run: |
+          npm install -g yarn@${{ env.YARN_VERSION }}
+          yarn set version ${{ env.YARN_VERSION }}
+
+      - name: Configure Yarn cache
+        run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Setup Hardhat cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.HARDHAT_CACHE_DIR }}
+          key: hardhat-${{ runner.os }}-${{ hashFiles('hardhat.config.ts', 'contracts/**/*.sol') }}
+          restore-keys: |
+            hardhat-${{ runner.os }}-
+
+      - name: Clean previous builds
+        run: yarn clean
+
+      - name: Compile contracts
+        run: yarn compile
+
+      - name: Generate Diamond ABI
+        run: yarn diamond:generate-abi
+
+      - name: Generate TypeChain types
+        run: yarn diamond:generate-abi-typechain
+
+      - name: Build TypeScript
+        run: npx tsc --noEmit
+
+      - name: Validate Diamond configuration
+        run: |
+          if [ ! -f "diamonds/GNUSDAODiamond/gnusdaodiamond.config.json" ]; then
+            echo "❌ Diamond configuration file not found"
+            exit 1
+          fi
+          echo "✅ Diamond configuration validated"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            artifacts/
+            diamond-abi/
+            diamond-typechain-types/
+            typechain-types/
+          retention-days: 30
+
+  # Run unit tests
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build
+
+    strategy:
+      matrix:
+        node-version: [18.19.0]
+        test-group: [unit, integration]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+
+      - name: Setup Yarn
+        run: |
+          npm install -g yarn@${{ env.YARN_VERSION }}
+          yarn set version ${{ env.YARN_VERSION }}
+
+      - name: Configure Yarn cache
+        run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+
+      - name: Setup Hardhat cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.HARDHAT_CACHE_DIR }}
+          key: hardhat-${{ runner.os }}-${{ hashFiles('hardhat.config.ts', 'contracts/**/*.sol') }}
+
+      - name: Run ${{ matrix.test-group }} tests
+        run: |
+          if [ "${{ matrix.test-group }}" = "unit" ]; then
+            npx hardhat test test/unit/ --parallel
+          elif [ "${{ matrix.test-group }}" = "integration" ]; then
+            npx hardhat test test/integration/ --parallel
+          fi
+        env:
+          HARDHAT_PARALLEL: true
+          HARDHAT_PARALLEL_MAX_JOBS: 4
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.test-group }}
+          path: |
+            test-results.xml
+            coverage/
+          retention-days: 30
+
+  # Multi-chain testing
+  test-multichain:
+    name: Multi-Chain Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: build
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'multichain-test')
+
+    strategy:
+      matrix:
+        network: [sepolia, polygon-amoy, arbitrum-sepolia, base-sepolia]
+        include:
+          - network: sepolia
+            rpc_env: SEPOLIA_RPC
+            block_env: SEPOLIA_BLOCK
+          - network: polygon-amoy
+            rpc_env: POLYGON_AMOY_RPC
+            block_env: POLYGON_AMOY_BLOCK
+          - network: arbitrum-sepolia
+            rpc_env: ARBITRUM_SEPOLIA_RPC
+            block_env: ARBITRUM_SEPOLIA_BLOCK
+          - network: base-sepolia
+            rpc_env: BASE_SEPOLIA_RPC
+            block_env: BASE_SEPOLIA_BLOCK
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+
+      - name: Setup Yarn
+        run: |
+          npm install -g yarn@${{ env.YARN_VERSION }}
+          yarn set version ${{ env.YARN_VERSION }}
+
+      - name: Configure Yarn cache
+        run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+
+      - name: Setup Hardhat cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.HARDHAT_CACHE_DIR }}
+          key: hardhat-${{ runner.os }}-${{ hashFiles('hardhat.config.ts', 'contracts/**/*.sol') }}
+
+      - name: Run fork tests on ${{ matrix.network }}
+        run: |
+          export ${{ matrix.rpc_env }}="${{ secrets[matrix.rpc_env] }}"
+          export ${{ matrix.block_env }}="${{ secrets[matrix.block_env] }}"
+          npx hardhat test test/deployment/ --network ${{ matrix.network }} --grep "fork"
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Upload fork test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fork-test-results-${{ matrix.network }}
+          path: |
+            test-results-${{ matrix.network }}.xml
+          retention-days: 30
+
+  # Test coverage analysis
+  coverage:
+    name: Test Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [test-unit, test-multichain]
+    if: github.event.inputs.skip_coverage != 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+
+      - name: Setup Yarn
+        run: |
+          npm install -g yarn@${{ env.YARN_VERSION }}
+          yarn set version ${{ env.YARN_VERSION }}
+
+      - name: Configure Yarn cache
+        run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+
+      - name: Setup Hardhat cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.HARDHAT_CACHE_DIR }}
+          key: hardhat-${{ runner.os }}-${{ hashFiles('hardhat.config.ts', 'contracts/**/*.sol') }}
+
+      - name: Run coverage analysis
+        run: yarn coverage
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage/
+            lcov.info
+          retention-days: 30
+
+      - name: Validate coverage thresholds
+        run: |
+          # Extract coverage percentage from lcov.info
+          if command -v lcov >/dev/null 2>&1; then
+            TOTAL_COVERAGE=$(lcov --summary lcov.info 2>/dev/null | grep "lines......" | sed 's/.*: \([0-9.]*\).*/\1/' | head -1)
+            echo "Total coverage: ${TOTAL_COVERAGE}%"
+
+            # Check if coverage meets minimum threshold
+            if (( $(echo "${TOTAL_COVERAGE} < 80.0" | bc -l 2>/dev/null || echo "1") )); then
+              echo "❌ Coverage ${TOTAL_COVERAGE}% is below minimum threshold of 80%"
+              exit 1
+            else
+              echo "✅ Coverage ${TOTAL_COVERAGE}% meets minimum threshold"
+            fi
+          else
+            echo "⚠️ lcov not available, skipping coverage validation"
+          fi
+
+  # Performance benchmarking
+  benchmark:
+    name: Performance Benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+
+      - name: Setup Yarn
+        run: |
+          npm install -g yarn@${{ env.YARN_VERSION }}
+          yarn set version ${{ env.YARN_VERSION }}
+
+      - name: Configure Yarn cache
+        run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+
+      - name: Run performance tests
+        run: |
+          echo "Running gas usage analysis..."
+          npx hardhat test test/unit/ --grep "gas" --reporter json > gas-report.json || true
+
+          echo "Running deployment size analysis..."
+          npx hardhat size-contracts || true
+
+          echo "Running performance benchmarks..."
+          yarn perf-monitor || echo "Performance monitoring script not found"
+
+      - name: Upload performance reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-report
+          path: |
+            gas-report.json
+            size-report.json
+          retention-days: 30
+
+  # Build reproducibility check
+  reproducibility:
+    name: Build Reproducibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+
+      - name: Setup Yarn
+        run: |
+          npm install -g yarn@${{ env.YARN_VERSION }}
+          yarn set version ${{ env.YARN_VERSION }}
+
+      - name: Configure Yarn cache
+        run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Clean and rebuild
+        run: |
+          yarn clean
+          yarn build
+
+      - name: Generate build hash
+        run: |
+          find artifacts -type f -name "*.json" -exec sha256sum {} \; | sort > build-hash.txt
+          echo "Build hash generated: $(cat build-hash.txt | sha256sum | cut -d' ' -f1)"
+
+      - name: Upload reproducibility artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: reproducibility-check
+          path: |
+            build-hash.txt
+          retention-days: 30
+
+  # Create signed artifacts with provenance
+  artifacts:
+    name: Create Signed Artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [build, test-unit, coverage, benchmark]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+
+      - name: Setup Yarn
+        run: |
+          npm install -g yarn@${{ env.YARN_VERSION }}
+          yarn set version ${{ env.YARN_VERSION }}
+
+      - name: Configure Yarn cache
+        run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+
+      - name: Create artifact bundle
+        run: |
+          mkdir -p signed-artifacts
+          cp -r artifacts signed-artifacts/
+          cp -r diamond-abi signed-artifacts/
+          cp -r diamond-typechain-types signed-artifacts/
+          cp lcov.info signed-artifacts/ || true
+
+          # Create manifest with build info
+          cat > signed-artifacts/manifest.json << EOF
+          {
+            "project": "gnus-dao",
+            "version": "${{ github.sha }}",
+            "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "repository": "${{ github.repository }}",
+            "ref": "${{ github.ref }}",
+            "workflow": "${{ github.workflow }}",
+            "run_id": "${{ github.run_id }}",
+            "run_attempt": "${{ github.run_attempt }}"
+          }
+          EOF
+
+      - name: Generate artifact signature
+        run: |
+          # Create a simple signature using sha256 of the manifest
+          MANIFEST_HASH=$(sha256sum signed-artifacts/manifest.json | cut -d' ' -f1)
+          echo "${MANIFEST_HASH}" > signed-artifacts/manifest.sha256
+
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-artifacts-${{ github.sha }}
+          path: signed-artifacts/
+          retention-days: 90
+
+  # Final validation and summary
+  validate:
+    name: Final Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [security-check, build, test-unit, test-multichain, coverage, benchmark, reproducibility]
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate pipeline summary
+        run: |
+          echo "## 🏗️ GNUS-DAO CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pipeline Results:" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔒 Security Check: ${{ needs.security-check.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔨 Build: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🧪 Unit Tests: ${{ needs.test-unit.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🌐 Multi-Chain Tests: ${{ needs.test-multichain.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 📊 Coverage: ${{ needs.coverage.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- ⚡ Benchmark: ${{ needs.benchmark.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔄 Reproducibility: ${{ needs.reproducibility.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check overall pipeline status
+          if [[ "${{ needs.security-check.result }}" == "success" && \
+                "${{ needs.build.result }}" == "success" && \
+                "${{ needs.test-unit.result }}" == "success" && \
+                "${{ needs.coverage.result }}" == "success" ]]; then
+            echo "### ✅ Pipeline Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
+            echo "All critical checks passed. Ready for deployment." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Pipeline Status: FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "Some checks failed. Please review the logs above." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📈 Performance Metrics:" >> $GITHUB_STEP_SUMMARY
+          echo "- Total runtime: ~$((SECONDS/60)) minutes" >> $GITHUB_STEP_SUMMARY
+          echo "- Parallel test execution: ✅ Enabled" >> $GITHUB_STEP_SUMMARY
+          echo "- Build caching: ✅ Enabled" >> $GITHUB_STEP_SUMMARY
+          echo "- Frozen lockfile: ✅ Enforced" >> $GITHUB_STEP_SUMMARY

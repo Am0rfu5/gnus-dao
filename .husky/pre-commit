@@ -1,0 +1,20 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Check for emergency bypass
+if [ "$HUSKY_SKIP_HOOKS" = "1" ] || [ "$EMERGENCY_BYPASS" = "1" ]; then
+  echo "🚨 SECURITY HOOKS BYPASSED - EMERGENCY MODE"
+  echo "   Reason should be documented in emergency bypass log"
+  exit 0
+fi
+
+# Start performance monitoring
+yarn perf-monitor start pre-commit
+
+# Run lint-staged
+if npx lint-staged; then
+  yarn perf-monitor end true
+else
+  yarn perf-monitor end false
+  exit 1
+fi

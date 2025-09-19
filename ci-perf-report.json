@@ -1,0 +1,92 @@
+{
+  "timestamp": "2025-09-18T22:18:54.487Z",
+  "duration": 6104,
+  "metrics": {
+    "build": {
+      "contractSize": {
+        "totalBytes": 21591,
+        "averageBytes": 5398,
+        "contractCount": 4,
+        "largestContract": {
+          "name": "GNUSDAODiamond",
+          "size": 9402
+        }
+      },
+      "diamondAbi": {
+        "fileCount": 1,
+        "totalSize": 12353
+      }
+    },
+    "test": {
+      "testFileCount": 12,
+      "testCategories": {
+        "unit": 6,
+        "integration": 3,
+        "deployment": 1
+      },
+      "compileTime": 6084
+    },
+    "coverage": {},
+    "security": {
+      "configFiles": {
+        ".semgrep.yml": {
+          "exists": true,
+          "size": 8362,
+          "lastModified": "2025-09-18T22:15:20.205Z"
+        },
+        ".eslintrc.js": {
+          "exists": false
+        },
+        "hardhat.config.ts": {
+          "exists": true,
+          "size": 11501,
+          "lastModified": "2025-09-18T15:17:20.183Z"
+        }
+      },
+      "overallScore": 100
+    },
+    "system": {
+      "nodeVersion": "v20.15.0",
+      "platform": "linux",
+      "arch": "x64",
+      "memoryUsage": {
+        "total": 4,
+        "used": 4,
+        "percentage": 100
+      },
+      "uptime": 0.033814152,
+      "dependencies": {
+        "runtime": 0,
+        "dev": 63,
+        "total": 63
+      },
+      "lockfileSize": 405146
+    },
+    "artifacts": {
+      "artifacts": {
+        "size": 11144302,
+        "exists": true
+      },
+      "diamond-abi": {
+        "size": 12353,
+        "exists": true
+      },
+      "diamond-typechain-types": {
+        "size": 31809,
+        "exists": true
+      },
+      "typechain-types": {
+        "size": 499079,
+        "exists": true
+      },
+      "coverage": {
+        "size": 172406,
+        "exists": true
+      }
+    }
+  },
+  "recommendations": [
+    "High memory usage detected - consider increasing Node.js memory limit",
+    "Missing security configuration files: .eslintrc.js"
+  ]
+}

@@ -1,0 +1,151 @@
+name: OSSF Scorecard
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+  # Run analysis on a schedule
+  schedule:
+    - cron: '0 12 * * 1'  # Every Monday at 12:00 UTC
+  # Run on pushes to main/develop branches
+  push:
+    branches: [main, develop]
+  # Run on pull requests
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  id-token: write
+  actions: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  scorecard:
+    name: OSSF Scorecard Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for better analysis
+
+      - name: Run OSSF Scorecard
+        uses: ossf/scorecard-action@v2
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # Publish results to security tab
+          publish_results: true
+
+      - name: Upload SARIF results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+
+      - name: Generate Scorecard Badge
+        id: scorecard-badge
+        run: |
+          # Extract the overall score from the SARIF file
+          score=$(jq -r '.runs[0].results[0].properties.score' results.sarif 2>/dev/null || echo "0")
+
+          # Determine badge color based on score
+          if [ "$score" -ge 9 ]; then
+            color="brightgreen"
+          elif [ "$score" -ge 7 ]; then
+            color="green"
+          elif [ "$score" -ge 5 ]; then
+            color="yellow"
+          elif [ "$score" -ge 3 ]; then
+            color="orange"
+          else
+            color="red"
+          fi
+
+          # Create badge URL
+          badge_url="https://img.shields.io/badge/OSSF%20Scorecard-${score}/10-${color}"
+
+          echo "score=$score" >> $GITHUB_OUTPUT
+          echo "badge_url=$badge_url" >> $GITHUB_OUTPUT
+
+      - name: Comment on PR with Scorecard Results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const results = JSON.parse(fs.readFileSync('results.sarif', 'utf8'));
+
+            // Extract key metrics
+            const score = results.runs[0]?.results?.[0]?.properties?.score || 0;
+            const details = results.runs[0]?.results?.[0]?.properties?.details || [];
+
+            // Create comment body
+            let comment = `## 🛡️ OSSF Scorecard Results\n\n`;
+            comment += `**Overall Score: ${score}/10**\n\n`;
+
+            // Add key findings
+            if (details.length > 0) {
+              comment += `### Key Findings:\n`;
+              details.slice(0, 5).forEach(detail => {
+                const checkName = detail.name || 'Unknown Check';
+                const checkScore = detail.score || 0;
+                const reason = detail.reason || 'No details available';
+                comment += `- **${checkName}**: ${checkScore}/10 - ${reason}\n`;
+              });
+            }
+
+            comment += `\n📊 [View full results](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/security/code-scanning?query=tool:ossf-scorecard)\n`;
+            comment += `\n🔗 [OSSF Scorecard Documentation](https://github.com/ossf/scorecard)\n`;
+
+            // Post or update comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const scorecardComment = comments.find(comment =>
+              comment.body.includes('OSSF Scorecard Results')
+            );
+
+            if (scorecardComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: scorecardComment.id,
+                body: comment
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+            }
+
+      - name: Check Minimum Score Threshold
+        run: |
+          score=$(jq -r '.runs[0].results[0].properties.score' results.sarif 2>/dev/null || echo "0")
+
+          echo "Current OSSF Scorecard score: $score/10"
+
+          # Set minimum threshold (adjust as needed)
+          min_score=5
+
+          if [ "$score" -lt "$min_score" ]; then
+            echo "❌ OSSF Scorecard score ($score) is below minimum threshold ($min_score)"
+            echo "Please review the security findings and address critical issues."
+            exit 1
+          else
+            echo "✅ OSSF Scorecard score ($score) meets minimum requirements"
+          fi
+
+      - name: Archive Scorecard Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: ossf-scorecard-results
+          path: results.sarif
+          retention-days: 30

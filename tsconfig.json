@@ -15,5 +15,5 @@
   },
   "include": ["./scripts", "./test", "./test-suites", "./typechain-types"],
   "files": ["./hardhat.config.ts"],
-  "exclude": ["./notes/**/*", "./node_modules", "./dist", "./artifacts", "./coverage", "./cache", "./types"],
+  "exclude": ["./notes/**/*", "./node_modules", "./dist", "./artifacts", "./coverage", "./cache", "./types", "./typechain-types/**/*", "./diamond-typechain-types/**/*"],
 }

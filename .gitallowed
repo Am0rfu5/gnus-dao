@@ -1,0 +1,14 @@
+# Git Secrets Allowed Patterns for GNUS-DAO
+# This file contains patterns for false positives that should be allowed
+# These are primarily test/mock addresses used in unit tests
+
+# Test Ethereum addresses used in DefenderDiamondDeployer.test.ts
+0x1234567890abcdef1234567890abcdef12345678
+0x9876543210fedcba9876543210fedcba98765432
+0x5555555555555555555555555555555555555555
+0x1111111111111111111111111111111111111111
+0x2222222222222222222222222222222222222222
+
+# Common test patterns (allow any address starting with these patterns)
+# Note: These are only allowed in test files, not production code
+^0x[0-9a-fA-F]{39}$

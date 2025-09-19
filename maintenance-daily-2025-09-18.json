@@ -1,0 +1,21 @@
+{
+  "timestamp": "2025-09-18T23:50:44.366Z",
+  "frequency": "daily",
+  "results": [
+    {
+      "task": "Cache Cleanup",
+      "status": "error",
+      "error": "Command failed: find ~/.cache -name \"*.cache\" -mtime +7 -delete"
+    },
+    {
+      "task": "Log Rotation",
+      "status": "success",
+      "result": "Log rotation completed"
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "successful": 1,
+    "failed": 1
+  }
+}

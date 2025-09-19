@@ -229,7 +229,7 @@ export class RPCDiamondDeployer {
 	public static getNetworkConfigFromHardhat(networkName: string): HardhatNetworkConfig {
 		try {
 			const chainManager = (hre.config as any).chainManager;
-			if (!chainManager || !chainManager.chains || !chainManager.chains[networkName]) {
+			if (!chainManager?.chains?.[networkName]) {
 				throw new Error(
 					`Network "${networkName}" not found in hardhat chainManager configuration`,
 				);
@@ -650,7 +650,7 @@ export class RPCDiamondDeployer {
 	 */
 	public isDiamondDeployed(): boolean {
 		const deployedData = this.diamond?.getDeployedDiamondData();
-		return !!(deployedData && deployedData.DiamondAddress);
+		return !!deployedData?.DiamondAddress;
 	}
 
 	/**
