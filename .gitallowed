@@ -8,6 +8,7 @@
 0x5555555555555555555555555555555555555555
 0x1111111111111111111111111111111111111111
 0x2222222222222222222222222222222222222222
+0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 
 # Common test patterns (allow any address starting with these patterns)
 # Note: These are only allowed in test files, not production code

@@ -1,10 +1,4 @@
-# Security Tool Versions
-# This file is automatically managed by the security-tool-updater.js script
-# Do not edit manually - changes will be overwritten
-
-nodejs 18.19.0
-yarn 1.22.19
-slither 0.10.0
-semgrep 1.57.0
-snyk 1.1248.0
-osv-scanner 1.6.0
+slither 0.3.0
+semgrep 1.137.0
+snyk 1.1299.0
+osv-scanner 2.2.2
