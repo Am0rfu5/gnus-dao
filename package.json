@@ -40,7 +40,7 @@
     "security-alerting": "node scripts/devops/security-alerting.js",
     "security-metrics": "node scripts/devops/security-metrics-dashboard.js",
     "ci-performance-dashboard": "node scripts/devops/ci-performance-dashboard.js",
-    "cost-analyzer": "node scripts/devops/cost-analyzer.js",
+    "cost-analyzer": "npx ts-node scripts/devops/cost-analyzer.ts",
     "test-sharding": "node scripts/devops/test-sharding.js",
     "smart-trigger": "node scripts/devops/smart-trigger.js",
     "health-check": "node scripts/devops/health-check.js",

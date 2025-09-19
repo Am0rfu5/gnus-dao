@@ -318,118 +318,183 @@ jobs:
 ### Cost Analysis Script
 
 ```javascript
-// scripts/cost-analyzer.js
-const fs = require('fs');
-const path = require('path');
+### Cost Analysis Script
+
+```javascript
+// scripts/cost-analyzer.ts
+import * as fs from 'fs';
+import * as path from 'path';
+
+interface CostEntry {
+  workflow: string;
+  run_id: string;
+  run_number: string;
+  runtime_minutes: number;
+  runner_type: string;
+  estimated_cost: number;
+  timestamp: string;
+  branch: string;
+  event: string;
+  status?: string;
+}
+
+interface WorkflowCost {
+  workflow: string;
+  totalCost: number;
+  runCount: number;
+  avgCost: number;
+  avgRuntime: number;
+}
+
+interface CostAnalysis {
+  totalCost: number;
+  avgCost: number;
+  runCount: number;
+  workflowCosts: WorkflowCost[];
+  budgetStatus: 'good' | 'warning' | 'exceeded' | 'unknown';
+  budgetUsed: number;
+  budgetRemaining: number;
+  timeframe: string;
+  recommendations: CostRecommendation[];
+}
+
+interface CostRecommendation {
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  type: 'cost-optimization' | 'performance' | 'reliability' | 'budget';
+  title: string;
+  message: string;
+  savings?: number;
+  suggestions: string[];
+}
 
 class CostAnalyzer {
+  private costData: CostEntry[];
+  private costFile: string;
+  private budgetLimit: number;
+
   constructor() {
     this.costData = [];
     this.costFile = path.join(process.cwd(), '.github/costs/workflow-costs.jsonl');
+    this.budgetLimit = parseFloat(process.env.COST_BUDGET_LIMIT || '50'); // $50 default
   }
 
-  loadCostData() {
+  loadCostData(): void {
     if (!fs.existsSync(this.costFile)) {
-      console.log('No cost data file found');
+      console.log('📄 No cost data file found. Creating initial cost tracking file...');
+      this.initializeCostFile();
       return;
     }
 
-    const lines = fs.readFileSync(this.costFile, 'utf8').trim().split('\n');
-    this.costData = lines.map(line => JSON.parse(line));
+    try {
+      const content = fs.readFileSync(this.costFile, 'utf8').trim();
+      if (content) {
+        const lines = content.split('\n');
+        this.costData = lines
+          .map((line) => JSON.parse(line) as CostEntry)
+          .filter((item) => item.estimated_cost > 0);
+      }
+      console.log(`✅ Loaded ${this.costData.length} cost records`);
+    } catch (error) {
+      console.error('❌ Error loading cost data:', error instanceof Error ? error.message : error);
+    }
   }
 
-  analyzeCosts() {
-    const totalCost = this.costData.reduce((sum, item) => sum + item.estimated_cost, 0);
-    const avgCost = totalCost / this.costData.length;
+  trackCurrentWorkflow(): CostEntry {
+    const runtimeMinutes =
+      (Date.now() -
+        new Date(process.env.GITHUB_RUN_STARTED_AT || Date.now()).getTime()) /
+      1000 /
+      60;
+    const runnerType = process.env.RUNNER_NAME || 'ubuntu-latest';
+    const estimatedCost = this.calculateEstimatedCost(runtimeMinutes, runnerType);
 
-    // Group by workflow
-    const byWorkflow = this.costData.reduce((acc, item) => {
-      acc[item.workflow] = acc[item.workflow] || [];
-      acc[item.workflow].push(item);
-      return acc;
-    }, {});
+    const costEntry: CostEntry = {
+      workflow: process.env.GITHUB_WORKFLOW || 'unknown',
+      run_id: process.env.GITHUB_RUN_ID || 'unknown',
+      run_number: process.env.GITHUB_RUN_NUMBER || 'unknown',
+      runtime_minutes: Math.round(runtimeMinutes * 100) / 100,
+      runner_type: runnerType,
+      estimated_cost: Math.round(estimatedCost * 10000) / 10000,
+      timestamp: new Date().toISOString(),
+      branch: process.env.GITHUB_REF_NAME || 'unknown',
+      event: process.env.GITHUB_EVENT_NAME || 'unknown',
+    };
 
-    const workflowCosts = Object.entries(byWorkflow).map(([workflow, runs]) => ({
-      workflow,
-      totalCost: runs.reduce((sum, run) => sum + run.estimated_cost, 0),
-      runCount: runs.length,
-      avgCost: runs.reduce((sum, run) => sum + run.estimated_cost, 0) / runs.length
-    }));
+    // Append to cost file
+    fs.appendFileSync(this.costFile, JSON.stringify(costEntry) + '\n');
 
+    console.log(
+      `💰 Workflow cost tracked: $${estimatedCost.toFixed(4)} (${runtimeMinutes.toFixed(1)} minutes on ${runnerType})`
+    );
+
+    return costEntry;
+  }
+
+  analyzeCosts(timeframe: string = 'all'): CostAnalysis {
+    // Implementation details...
     return {
-      totalCost,
-      avgCost,
-      workflowCosts,
-      recommendations: this.generateRecommendations(workflowCosts)
+      totalCost: 0,
+      avgCost: 0,
+      runCount: 0,
+      workflowCosts: [],
+      budgetStatus: 'unknown',
+      budgetUsed: 0,
+      budgetRemaining: 0,
+      timeframe,
+      recommendations: [],
     };
   }
 
-  generateRecommendations(workflowCosts) {
-    const recommendations = [];
+  generateReport(timeframe: string = 'month'): { report: string; analysis: CostAnalysis } {
+    console.log(`📊 Generating cost analysis report for timeframe: ${timeframe}`);
 
-    // Find expensive workflows
-    const expensiveWorkflows = workflowCosts.filter(w => w.avgCost > 0.20);
+    const analysis = this.analyzeCosts(timeframe);
 
-    expensiveWorkflows.forEach(workflow => {
-      recommendations.push({
-        type: 'optimization',
-        workflow: workflow.workflow,
-        message: `High average cost: $${workflow.avgCost.toFixed(4)} per run`,
-        suggestions: [
-          'Consider using spot instances',
-          'Implement better caching',
-          'Review step timeouts',
-          'Consider parallel execution'
-        ]
-      });
-    });
+    // Generate comprehensive markdown report
+    const report = `# 💰 GitHub Actions Cost Analysis Report
 
-    return recommendations;
-  }
+**Generated**: ${new Date().toISOString()}
+**Timeframe**: ${timeframe}
+**Budget Limit**: $${this.budgetLimit}
 
-  generateReport() {
-    const analysis = this.analyzeCosts();
+## 📈 Summary
+- **Total Cost**: $${analysis.totalCost}
+- **Average Cost per Run**: $${analysis.avgCost}
+- **Total Runs**: ${analysis.runCount}
+- **Budget Status**: ${analysis.budgetStatus === 'good' ? '✅ Good' : analysis.budgetStatus === 'warning' ? '⚠️ Warning' : '🔴 Exceeded'}
 
-    const report = `# 💰 GitHub Actions Cost Analysis
-
-## Summary
-- **Total Cost**: $${analysis.totalCost.toFixed(2)}
-- **Average Cost per Run**: $${analysis.avgCost.toFixed(4)}
-- **Total Runs Analyzed**: ${this.costData.length}
-
-## Workflow Costs
-
-| Workflow | Runs | Total Cost | Avg Cost |
-|----------|------|------------|----------|
+## 💵 Workflow Costs
+| Workflow | Runs | Total Cost | Avg Cost | Avg Runtime |
+|----------|------|------------|----------|-------------|
 ${analysis.workflowCosts.map(w =>
-  `| ${w.workflow} | ${w.runCount} | $${w.totalCost.toFixed(2)} | $${w.avgCost.toFixed(4)} |`
+  `| ${w.workflow} | ${w.runCount} | $${w.totalCost.toFixed(2)} | $${w.avgCost.toFixed(4)} | ${w.avgRuntime.toFixed(1)}m |`
 ).join('\n')}
 
-## Recommendations
-
+## 🎯 Recommendations
 ${analysis.recommendations.map(r =>
-  `### ${r.workflow}
+  `### ${r.title} (${r.priority})
 ${r.message}
+${r.savings ? `**Potential Savings**: $${r.savings.toFixed(2)}` : ''}
 
 **Suggestions:**
 ${r.suggestions.map(s => `- ${s}`).join('\n')}
 
-`
-).join('')}
+`).join('')}
 
 ---
-Generated: ${new Date().toISOString()}
+*Generated by cost-analyzer.ts*
 `;
 
-    const reportPath = path.join(process.cwd(), 'cost-analysis-report.md');
+    const reportPath = path.join(process.cwd(), `cost-analysis-report-${timeframe}.md`);
     fs.writeFileSync(reportPath, report);
-    console.log(`Cost analysis report saved to ${reportPath}`);
+    console.log(`📄 Cost analysis report saved to ${reportPath}`);
 
-    return report;
+    return { report, analysis };
   }
 }
 
 module.exports = CostAnalyzer;
+```
 ```
 
 ### Cost Budget Management
