@@ -10,6 +10,7 @@ artifacts
 
 .idea
 
+logs
 typechain-types
 fast.test.ts
 dist

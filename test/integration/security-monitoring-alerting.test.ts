@@ -287,15 +287,16 @@ describe('Security Monitoring and Alerting System', () => {
 	describe('Security Metrics Dashboard CLI', () => {
 		it('should generate metrics reports via CLI', (done: Mocha.Done) => {
 			const child: ChildProcess = spawn(
-				'node',
+				'npx',
 				[
+					'ts-node',
 					path.join(
 						__dirname,
 						'..',
 						'..',
 						'scripts',
 						'devops',
-						'security-metrics-dashboard.js',
+						'security-metrics-dashboard.ts',
 					),
 					'generate',
 					'weekly',
@@ -318,15 +319,16 @@ describe('Security Monitoring and Alerting System', () => {
 
 		it('should show dashboard status via CLI', (done: Mocha.Done) => {
 			const child: ChildProcess = spawn(
-				'node',
+				'npx',
 				[
+					'ts-node',
 					path.join(
 						__dirname,
 						'..',
 						'..',
 						'scripts',
 						'devops',
-						'security-metrics-dashboard.js',
+						'security-metrics-dashboard.ts',
 					),
 					'status',
 				],
@@ -364,7 +366,7 @@ describe('Security Monitoring and Alerting System', () => {
 				'npx ts-node scripts/devops/security-alerting.ts',
 			);
 			expect(scripts['security-metrics']).to.equal(
-				'node scripts/devops/security-metrics-dashboard.js',
+				'npx ts-node scripts/devops/security-metrics-dashboard.ts',
 			);
 			expect(scripts['incident-response']).to.equal(
 				'npx ts-node scripts/devops/incident-response.ts',
@@ -383,7 +385,7 @@ describe('Security Monitoring and Alerting System', () => {
 				'security-alerting.ts',
 				'incident-response.ts',
 				'security-health-checks.ts',
-				'security-metrics-dashboard.js',
+				'security-metrics-dashboard.ts',
 			];
 
 			scripts.forEach((script: string) => {
@@ -469,15 +471,16 @@ describe('Security Monitoring and Alerting System', () => {
 
 					// Step 3: Generate metrics report
 					const metricsChild: ChildProcess = spawn(
-						'node',
+						'npx',
 						[
+							'ts-node',
 							path.join(
 								__dirname,
 								'..',
 								'..',
 								'scripts',
 								'devops',
-								'security-metrics-dashboard.js',
+								'security-metrics-dashboard.ts',
 							),
 							'generate',
 							'daily',

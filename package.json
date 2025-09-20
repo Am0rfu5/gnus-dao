@@ -38,7 +38,7 @@
     "supply-chain-quick": "node scripts/devops/supply-chain-risk-assessment.js quick",
     "security-webhook": "node scripts/devops/security-monitoring-webhook.js",
     "security-alerting": "npx ts-node scripts/devops/security-alerting.ts",
-    "security-metrics": "node scripts/devops/security-metrics-dashboard.js",
+    "security-metrics": "npx ts-node scripts/devops/security-metrics-dashboard.ts",
     "ci-performance-dashboard": "node scripts/devops/ci-performance-dashboard.js",
     "cost-analyzer": "npx ts-node scripts/devops/cost-analyzer.ts",
     "test-sharding": "node scripts/devops/test-sharding.js",

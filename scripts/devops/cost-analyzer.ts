@@ -101,7 +101,7 @@ class CostAnalyzer {
 		runtimeMinutes: number,
 		runnerType: string = 'ubuntu-latest',
 	): number {
-		// GitHub Actions pricing (approximate as of 2024)
+		// GitHub Actions pricing (approximate as of 2025)
 		const pricing: Record<string, number> = {
 			'ubuntu-latest': 0.008, // $0.008 per minute
 			'ubuntu-latest-4-cores': 0.016, // $0.016 per minute
