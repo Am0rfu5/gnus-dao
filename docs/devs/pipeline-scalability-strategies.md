@@ -209,13 +209,20 @@ jobs:
 
 ### Intelligent Test Distribution
 
-```javascript
-// scripts/test-sharding.js
-const fs = require('fs');
-const path = require('path');
+```typescript
+// scripts/test-sharding.ts
+import * as fs from "fs";
+import * as path from "path";
+
+interface TestFile {
+  file: string;
+  size: number;
+  testCount: number;
+  category: "unit" | "integration" | "e2e" | "security" | "deployment";
+}
 
 class TestShardDistributor {
-  constructor(totalShards, shardIndex) {
+  constructor(totalShards: number, shardIndex: number) {
     this.totalShards = totalShards;
     this.shardIndex = shardIndex;
   }
@@ -320,7 +327,7 @@ module.exports = TestShardDistributor;
 - name: Run Sharded Tests
   run: |
     # Get test distribution for this shard
-    DISTRIBUTION=$(node scripts/test-sharding.js ${{ matrix.total-shards }} ${{ matrix.shard }})
+    DISTRIBUTION=$(npx ts-node scripts/devops/test-sharding.ts ${{ matrix.total-shards }} ${{ matrix.shard }})
 
     # Extract test files for this shard
     TEST_FILES=$(echo "$DISTRIBUTION" | jq -r '.tests[]')

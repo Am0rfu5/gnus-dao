@@ -41,7 +41,7 @@
     "security-metrics": "npx ts-node scripts/devops/security-metrics-dashboard.ts",
     "ci-performance-dashboard": "node scripts/devops/ci-performance-dashboard.js",
     "cost-analyzer": "npx ts-node scripts/devops/cost-analyzer.ts",
-    "test-sharding": "node scripts/devops/test-sharding.js",
+    "test-sharding": "npx ts-node scripts/devops/test-sharding.ts",
     "smart-trigger": "npx ts-node scripts/devops/smart-trigger.ts",
     "health-check": "npx ts-node scripts/devops/health-check.ts",
     "maintenance-automation": "npx ts-node scripts/devops/maintenance-automation.ts",
