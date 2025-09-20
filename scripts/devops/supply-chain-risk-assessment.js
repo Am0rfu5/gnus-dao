@@ -127,17 +127,22 @@ class SupplyChainRiskAssessment {
   async assessDependencyRisk() {
     this.log("📦 Assessing dependency risk");
 
-    const packageJson = JSON.parse(
-      fs.readFileSync(path.join(this.buildDir, "package.json"), "utf8"),
-    );
-    const dependencies = {
+    const packageJsonPath = path.join(this.buildDir, "package.json");
+    const dependencies = [];
+
+    if (!fs.existsSync(packageJsonPath)) {
+      return dependencies;
+    }
+
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+    const packageDependencies = {
       ...packageJson.dependencies,
       ...packageJson.devDependencies,
     };
 
     const dependencyRisks = [];
 
-    for (const [name, version] of Object.entries(dependencies)) {
+    for (const [name, version] of Object.entries(packageDependencies)) {
       const risk = await this.assessPackageRisk(name, version);
       dependencyRisks.push(risk);
     }
@@ -565,7 +570,7 @@ class SupplyChainRiskAssessment {
    */
   async checkSLSACompliance() {
     // Check if SLSA attestation script exists
-    const slsaScript = path.join(__dirname, "slsa-attestation.js");
+    const slsaScript = path.join(__dirname, "slsa-attestation.ts");
     const hasSLSAScript = fs.existsSync(slsaScript);
 
     return {
