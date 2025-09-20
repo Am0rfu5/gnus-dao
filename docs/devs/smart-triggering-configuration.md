@@ -149,7 +149,7 @@ jobs:
 ### Semantic Change Detection
 
 ```javascript
-// scripts/smart-trigger.js
+// scripts/smart-trigger.ts
 const { execSync } = require('child_process');
 const fs = require('fs');
 

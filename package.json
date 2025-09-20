@@ -42,7 +42,7 @@
     "ci-performance-dashboard": "node scripts/devops/ci-performance-dashboard.js",
     "cost-analyzer": "npx ts-node scripts/devops/cost-analyzer.ts",
     "test-sharding": "node scripts/devops/test-sharding.js",
-    "smart-trigger": "node scripts/devops/smart-trigger.js",
+    "smart-trigger": "npx ts-node scripts/devops/smart-trigger.ts",
     "health-check": "npx ts-node scripts/devops/health-check.ts",
     "maintenance-automation": "npx ts-node scripts/devops/maintenance-automation.ts",
     "incident-response": "npx ts-node scripts/devops/incident-response.ts",
