@@ -20,7 +20,7 @@ scripts/
 ├── provenance-validator.ts          # Dependency provenance validation
 ├── slsa-attestation.ts             # SLSA Level 3 build attestation
 ├── sigstore-integration.js         # Sigstore signing/verification
-└── supply-chain-risk-assessment.js # Risk assessment and reporting
+└── supply-chain-risk-assessment.ts # Risk assessment and reporting
 ```
 
 ### Security Layers
@@ -39,7 +39,7 @@ scripts/
 yarn provenance-check
 
 # Validate specific package
-node scripts/provenance-validator.ts check <package-name>
+npx ts-node scripts/devops/provenance-validator.ts check <package-name>
 ```
 
 ### SLSA Build Attestation
@@ -49,7 +49,7 @@ node scripts/provenance-validator.ts check <package-name>
 yarn slsa-attest
 
 # Verify existing attestation
-node scripts/slsa-attestation.ts verify
+npx ts-node scripts/devops/slsa-attestation.ts verify
 ```
 
 ### Sigstore Integration
@@ -259,20 +259,20 @@ All security validations maintain comprehensive audit trails:
 
 ```bash
 # Check specific package
-node scripts/provenance-validator.ts check <package-name>
+npx ts-node scripts/devops/provenance-validator.ts check <package-name>
 
 # View detailed logs
-DEBUG=provenance node scripts/provenance-validator.ts
+DEBUG=provenance npx ts-node scripts/devops/provenance-validator.ts
 ```
 
 #### SLSA Attestation Errors
 
 ```bash
 # Verify build environment
-node scripts/slsa-attestation.ts verify-build
+npx ts-node scripts/devops/slsa-attestation.ts verify-build
 
 # Check attestation format
-node scripts/slsa-attestation.ts validate-format
+npx ts-node scripts/devops/slsa-attestation.ts validate-format
 ```
 
 #### Sigstore Signing Issues
@@ -302,7 +302,7 @@ npx ts-node scripts/devops/sigstore-integration.ts verify <artifact-path> <signa
 
 ```bash
 # Emergency risk assessment
-node scripts/supply-chain-risk-assessment.js assess --emergency
+npx ts-node scripts/devops/supply-chain-risk-assessment.ts assess --emergency
 
 # Revoke all signatures
 npx ts-node scripts/devops/sigstore-integration.ts revoke-all
