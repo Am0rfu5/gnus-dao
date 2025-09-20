@@ -17,7 +17,7 @@ The GNUS-DAO project implements a multi-layered supply chain security approach t
 
 ```bash
 scripts/
-├── provenance-validator.js          # Dependency provenance validation
+├── provenance-validator.ts          # Dependency provenance validation
 ├── slsa-attestation.js             # SLSA Level 3 build attestation
 ├── sigstore-integration.js         # Sigstore signing/verification
 └── supply-chain-risk-assessment.js # Risk assessment and reporting
@@ -39,7 +39,7 @@ scripts/
 yarn provenance-check
 
 # Validate specific package
-node scripts/provenance-validator.js check <package-name>
+node scripts/provenance-validator.ts check <package-name>
 ```
 
 ### SLSA Build Attestation
@@ -259,10 +259,10 @@ All security validations maintain comprehensive audit trails:
 
 ```bash
 # Check specific package
-node scripts/provenance-validator.js check <package-name>
+node scripts/provenance-validator.ts check <package-name>
 
 # View detailed logs
-DEBUG=provenance node scripts/provenance-validator.js
+DEBUG=provenance node scripts/provenance-validator.ts
 ```
 
 #### SLSA Attestation Errors
