@@ -24,7 +24,7 @@
     "semgrep:scan": "semgrep scan --config .semgrep.yml --error",
     "git-secrets:scan": "git secrets --scan",
     "commitlint": "commitlint --edit",
-    "perf-monitor": "node scripts/devops/perf-monitor.js",
+    "perf-monitor": "npx ts-node scripts/devops/perf-monitor.ts",
     "ci-perf-monitor": "node scripts/devops/ci-perf-monitor.js",
     "sign-artifacts": "node scripts/devops/sign-artifacts.js",
     "emergency-bypass": "npx ts-node scripts/devops/emergency-bypass.ts",
