@@ -29,7 +29,7 @@
     "sign-artifacts": "node scripts/devops/sign-artifacts.js",
     "emergency-bypass": "npx ts-node scripts/devops/emergency-bypass.ts",
     "security-check": "yarn audit && (yarn snyk:test || echo 'Snyk requires authentication - run yarn snyk:test after setup') && (yarn socket:scan || echo 'Socket.dev requires authentication - run yarn socket:scan after setup') && yarn osv:scan && yarn semgrep:scan && yarn git-secrets:scan",
-    "security-tool-update": "node scripts/devops/security-tool-updater.js",
+    "security-tool-update": "npx ts-node scripts/devops/security-tool-updater.ts",
     "provenance-check": "npx ts-node scripts/devops/provenance-validator.ts",
     "slsa-attest": "node scripts/devops/slsa-attestation.js generate",
     "sigstore-sign": "npx ts-node scripts/devops/sigstore-integration.ts sign-all",

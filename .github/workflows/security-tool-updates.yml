@@ -61,7 +61,7 @@ jobs:
             export FORCE_UPDATE=true
           fi
 
-          node scripts/security-tool-updater.js
+          npx ts-node scripts/devops/security-tool-updater.ts
         env:
           FORCE_UPDATE: ${{ github.event.inputs.force_update }}
 
