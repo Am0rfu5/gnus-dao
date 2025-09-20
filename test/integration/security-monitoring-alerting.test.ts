@@ -221,15 +221,16 @@ describe('Security Monitoring and Alerting System', () => {
 	describe('Security Health Checks CLI', () => {
 		it('should run health checks via CLI', (done: Mocha.Done) => {
 			const child: ChildProcess = spawn(
-				'node',
+				'npx',
 				[
+					'ts-node',
 					path.join(
 						__dirname,
 						'..',
 						'..',
 						'scripts',
 						'devops',
-						'security-health-checks.js',
+						'security-health-checks.ts',
 					),
 					'check',
 					'dependency-check',
@@ -254,15 +255,16 @@ describe('Security Monitoring and Alerting System', () => {
 
 		it('should show health check status via CLI', (done: Mocha.Done) => {
 			const child: ChildProcess = spawn(
-				'node',
+				'npx',
 				[
+					'ts-node',
 					path.join(
 						__dirname,
 						'..',
 						'..',
 						'scripts',
 						'devops',
-						'security-health-checks.js',
+						'security-health-checks.ts',
 					),
 					'status',
 				],
@@ -368,7 +370,7 @@ describe('Security Monitoring and Alerting System', () => {
 				'npx ts-node scripts/devops/incident-response.ts',
 			);
 			expect(scripts['security-health-checks']).to.equal(
-				'node scripts/devops/security-health-checks.js',
+				'npx ts-node scripts/devops/security-health-checks.ts',
 			);
 		});
 	});
@@ -380,7 +382,7 @@ describe('Security Monitoring and Alerting System', () => {
 				'security-monitoring-webhook.js',
 				'security-alerting.ts',
 				'incident-response.ts',
-				'security-health-checks.js',
+				'security-health-checks.ts',
 				'security-metrics-dashboard.js',
 			];
 
@@ -489,15 +491,16 @@ describe('Security Monitoring and Alerting System', () => {
 
 						// Step 4: Run health checks
 						const healthChild: ChildProcess = spawn(
-							'node',
+							'npx',
 							[
+								'ts-node',
 								path.join(
 									__dirname,
 									'..',
 									'..',
 									'scripts',
 									'devops',
-									'security-health-checks.js',
+									'security-health-checks.ts',
 								),
 								'status',
 							],

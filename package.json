@@ -46,7 +46,7 @@
     "health-check": "npx ts-node scripts/devops/health-check.ts",
     "maintenance-automation": "npx ts-node scripts/devops/maintenance-automation.ts",
     "incident-response": "npx ts-node scripts/devops/incident-response.ts",
-    "security-health-checks": "node scripts/devops/security-health-checks.js",
+    "security-health-checks": "npx ts-node scripts/devops/security-health-checks.ts",
     "security-commit-check": "npx ts-node scripts/devops/security-commit-check.ts",
     "prepare": "husky"
   },
