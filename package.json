@@ -47,7 +47,7 @@
     "maintenance-automation": "npx ts-node scripts/devops/maintenance-automation.ts",
     "incident-response": "npx ts-node scripts/devops/incident-response.ts",
     "security-health-checks": "node scripts/devops/security-health-checks.js",
-    "security-commit-check": "node scripts/devops/security-commit-check.js",
+    "security-commit-check": "npx ts-node scripts/devops/security-commit-check.ts",
     "prepare": "husky"
   },
   "authors": [

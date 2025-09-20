@@ -92,6 +92,18 @@ Security checks are automatically run during the pre-commit hook via Husky. The 
 - Dependency auditing
 - Test execution
 
+### Commit Message Security Validation
+
+Security-related commits are automatically validated during the commit-msg hook:
+
+- **Pattern Detection**: Identifies commits containing security keywords (security, vulnerability, exploit, CVE, audit)
+- **Message Validation**: Ensures security commits are descriptive and properly formatted
+- **CVE Format Checking**: Validates CVE references use proper format (CVE-YYYY-NNNN)
+- **Credential Fix Validation**: Ensures credential-related fixes include removal/rotation actions
+- **Audit Trail**: Logs all security commits for compliance and tracking
+
+Security commit messages must be more than 10 characters and follow security best practices.
+
 ### Security Tool Configuration
 
 - **Yarn**: Configured with checksum validation and immutable installs (`.yarnrc.yml`)
