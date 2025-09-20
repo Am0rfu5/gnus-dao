@@ -44,7 +44,7 @@
     "test-sharding": "node scripts/devops/test-sharding.js",
     "smart-trigger": "node scripts/devops/smart-trigger.js",
     "health-check": "npx ts-node scripts/devops/health-check.ts",
-    "maintenance-automation": "node scripts/devops/maintenance-automation.js",
+    "maintenance-automation": "npx ts-node scripts/devops/maintenance-automation.ts",
     "incident-response": "npx ts-node scripts/devops/incident-response.ts",
     "security-health-checks": "node scripts/devops/security-health-checks.js",
     "security-commit-check": "node scripts/devops/security-commit-check.js",

@@ -765,7 +765,7 @@ export default HealthChecker;
 ### Maintenance Automation Script
 
 ```javascript
-// scripts/maintenance-automation.js
+// scripts/maintenance-automation.ts
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
