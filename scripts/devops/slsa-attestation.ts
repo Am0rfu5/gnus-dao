@@ -119,6 +119,38 @@ class SLSAAttestation {
 	}
 
 	/**
+	 * Validate and sanitize file path to prevent directory traversal attacks
+	 */
+	private validateFilePath(inputPath: string, allowedDirs: string[]): string {
+		// Resolve the path to prevent directory traversal
+		const resolvedPath = path.resolve(inputPath);
+
+		// Check if the resolved path is within one of the allowed directories
+		const isAllowed = allowedDirs.some((allowedDir) => {
+			const resolvedAllowedDir = path.resolve(allowedDir);
+			return (
+				resolvedPath.startsWith(resolvedAllowedDir + path.sep) ||
+				resolvedPath === resolvedAllowedDir
+			);
+		});
+
+		if (!isAllowed) {
+			throw new Error(`Access denied: Path ${inputPath} is outside allowed directories`);
+		}
+
+		// Additional check for directory traversal patterns
+		if (
+			inputPath.includes('..') ||
+			inputPath.includes('../') ||
+			inputPath.includes('..\\')
+		) {
+			throw new Error(`Access denied: Path traversal detected in ${inputPath}`);
+		}
+
+		return resolvedPath;
+	}
+
+	/**
 	 * Generate SLSA Level 3 build attestation
 	 */
 	async generateAttestation(options: AttestationOptions = {}): Promise<AttestationResult> {
@@ -294,8 +326,14 @@ class SLSAAttestation {
 	 * Generate signature
 	 */
 	private generateSignature(data: string): string {
-		// Mock signature - in production, use proper cryptographic signing
-		const hmac = crypto.createHmac('sha256', 'gnus-dao-signing-key');
+		// Use environment variable for signing key - required for security
+		const signingKey = process.env.SLSA_SIGNING_KEY;
+		if (!signingKey) {
+			throw new Error(
+				'SLSA_SIGNING_KEY environment variable must be set for secure signing',
+			);
+		}
+		const hmac = crypto.createHmac('sha256', signingKey);
 		hmac.update(data);
 		return hmac.digest('base64');
 	}
@@ -313,11 +351,19 @@ class SLSAAttestation {
 	async verifyAttestation(attestationFile: string): Promise<boolean> {
 		this.log(`🔍 Verifying SLSA attestation: ${path.basename(attestationFile)}`);
 
-		if (!fs.existsSync(attestationFile)) {
-			throw new Error(`Attestation file not found: ${attestationFile}`);
+		// Validate attestation file path
+		const validatedAttestationFile = this.validateFilePath(attestationFile, [
+			this.attestationsDir, // Allow attestation files in attestations directory
+			this.buildDir, // Allow files in build directory for flexibility
+		]);
+
+		if (!fs.existsSync(validatedAttestationFile)) {
+			throw new Error(`Attestation file not found: ${validatedAttestationFile}`);
 		}
 
-		const envelope: DSSEEnvelope = JSON.parse(fs.readFileSync(attestationFile, 'utf8'));
+		const envelope: DSSEEnvelope = JSON.parse(
+			fs.readFileSync(validatedAttestationFile, 'utf8'),
+		);
 
 		// Verify envelope structure
 		this.verifyEnvelopeStructure(envelope);
@@ -429,8 +475,15 @@ class SLSAAttestation {
 			throw new Error('Missing run details in provenance');
 		}
 
-		// Verify build type
-		if (!predicate.buildDefinition.buildType.includes('slsa.dev')) {
+		// Verify build type - accept valid SLSA build types
+		const validBuildTypes = [
+			'https://slsa.dev/provenance/v0.2',
+			'https://github.com/Attestations/GitHubActionsWorkflow',
+		];
+		const isValidBuildType = validBuildTypes.some((type) =>
+			predicate.buildDefinition.buildType.includes(type),
+		);
+		if (!isValidBuildType) {
 			throw new Error('Invalid build type');
 		}
 

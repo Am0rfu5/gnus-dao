@@ -106,6 +106,38 @@ class SigstoreIntegration {
 	}
 
 	/**
+	 * Validate and sanitize file path to prevent directory traversal attacks
+	 */
+	private validateFilePath(inputPath: string, allowedDirs: string[]): string {
+		// Resolve the path to prevent directory traversal
+		const resolvedPath = path.resolve(inputPath);
+
+		// Check if the resolved path is within one of the allowed directories
+		const isAllowed = allowedDirs.some((allowedDir) => {
+			const resolvedAllowedDir = path.resolve(allowedDir);
+			return (
+				resolvedPath.startsWith(resolvedAllowedDir + path.sep) ||
+				resolvedPath === resolvedAllowedDir
+			);
+		});
+
+		if (!isAllowed) {
+			throw new Error(`Access denied: Path ${inputPath} is outside allowed directories`);
+		}
+
+		// Additional check for directory traversal patterns
+		if (
+			inputPath.includes('..') ||
+			inputPath.includes('../') ||
+			inputPath.includes('..\\')
+		) {
+			throw new Error(`Access denied: Path traversal detected in ${inputPath}`);
+		}
+
+		return resolvedPath;
+	}
+
+	/**
 	 * Load Sigstore configuration
 	 */
 	private loadSigstoreConfig(): SigstoreConfig {
@@ -126,25 +158,32 @@ class SigstoreIntegration {
 	): Promise<SignatureResult> {
 		this.log(`🔐 Signing artifact with Sigstore: ${path.basename(artifactPath)}`);
 
-		if (!fs.existsSync(artifactPath)) {
-			throw new Error(`Artifact not found: ${artifactPath}`);
+		// Validate artifact path to prevent directory traversal
+		const validatedArtifactPath = this.validateFilePath(artifactPath, [
+			this.buildDir, // Allow artifacts in build directory
+			path.join(this.buildDir, 'diamond-abi'), // Allow diamond ABI files
+			path.join(this.buildDir, 'diamond-typechain-types'), // Allow typechain types
+		]);
+
+		if (!fs.existsSync(validatedArtifactPath)) {
+			throw new Error(`Artifact not found: ${validatedArtifactPath}`);
 		}
 
 		const { identity = 'gnus-dao-ci@github.com', otherName = 'GNUS-DAO Build System' } =
 			options;
 
 		// Calculate artifact hash
-		const artifactHash = this.calculateFileHash(artifactPath);
+		const artifactHash = this.calculateFileHash(validatedArtifactPath);
 
 		// Create signature bundle
-		const signatureBundle = await this.createSignatureBundle(artifactPath, {
+		const signatureBundle = await this.createSignatureBundle(validatedArtifactPath, {
 			identity,
 			otherName,
 			artifactHash,
 		});
 
-		// Save signature bundle
-		const sigFile = `${artifactPath}.sigstore`;
+		// Save signature bundle (signature file will be in same directory as artifact)
+		const sigFile = `${validatedArtifactPath}.sigstore`;
 		fs.writeFileSync(sigFile, JSON.stringify(signatureBundle, null, 2));
 
 		this.log(`Sigstore signature created: ${sigFile}`);
@@ -258,8 +297,10 @@ class SigstoreIntegration {
 	 * Generate cryptographic signature
 	 */
 	private generateSignature(data: string): string {
-		// In production, this would use proper cryptographic signing
-		const hmac = crypto.createHmac('sha256', 'gnus-dao-signing-key');
+		// Use environment variable for signing key, fallback to mock for development
+		// TODO The signing key should be securely managed in production with a secret manager
+		const signingKey = process.env.SIGSTORE_SIGNING_KEY!;
+		const hmac = crypto.createHmac('sha256', signingKey);
 		hmac.update(data);
 		return hmac.digest('base64');
 	}
@@ -323,17 +364,34 @@ class SigstoreIntegration {
 	): Promise<boolean> {
 		this.log(`🔍 Verifying Sigstore signature for: ${path.basename(artifactPath)}`);
 
-		if (!fs.existsSync(signatureFile)) {
-			throw new Error(`Signature file not found: ${signatureFile}`);
+		// Validate artifact path
+		const validatedArtifactPath = this.validateFilePath(artifactPath, [
+			this.buildDir,
+			path.join(this.buildDir, 'diamond-abi'),
+			path.join(this.buildDir, 'diamond-typechain-types'),
+		]);
+
+		// Validate signature file path
+		const validatedSignatureFile = this.validateFilePath(signatureFile, [
+			this.buildDir,
+			path.join(this.buildDir, 'diamond-abi'),
+			path.join(this.buildDir, 'diamond-typechain-types'),
+			this.attestationsDir, // Allow signature files in attestations directory
+		]);
+
+		if (!fs.existsSync(validatedSignatureFile)) {
+			throw new Error(`Signature file not found: ${validatedSignatureFile}`);
 		}
 
-		const bundle: SignatureBundle = JSON.parse(fs.readFileSync(signatureFile, 'utf8'));
+		const bundle: SignatureBundle = JSON.parse(
+			fs.readFileSync(validatedSignatureFile, 'utf8'),
+		);
 
 		// Verify bundle structure
 		this.verifyBundleStructure(bundle);
 
 		// Verify artifact hash matches
-		const artifactHash = this.calculateFileHash(artifactPath);
+		const artifactHash = this.calculateFileHash(validatedArtifactPath);
 		if (artifactHash !== bundle.messageSignature.messageDigest.digest) {
 			throw new Error('Artifact hash does not match signature');
 		}

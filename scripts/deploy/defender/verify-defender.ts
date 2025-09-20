@@ -35,6 +35,33 @@ async function main(): Promise<void> {
 	const networkName = args[1] || hre.network.name;
 	const contractAddress = args[2];
 
+	// Validate network name to prevent path traversal attacks
+	const validNetworks = [
+		'arbitrum',
+		'base',
+		'mainnet',
+		'polygon',
+		'sepolia',
+		'hardhat',
+		'localhost',
+	];
+	if (!validNetworks.includes(networkName)) {
+		throw new Error(
+			`Invalid network name: ${networkName}. Valid networks: ${validNetworks.join(', ')}`,
+		);
+	}
+
+	// Additional validation for path traversal patterns
+	if (
+		networkName.includes('..') ||
+		networkName.includes('/') ||
+		networkName.includes('\\')
+	) {
+		throw new Error(
+			`Invalid network name: ${networkName}. Network name cannot contain path separators.`,
+		);
+	}
+
 	// Validate network
 	if (!hre.network.config || networkName === 'hardhat') {
 		throw new Error(
