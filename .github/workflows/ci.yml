@@ -503,39 +503,16 @@ jobs:
         with:
           name: coverage-report
 
-      - name: Create artifact bundle
+      - name: Create signed artifacts with provenance
         run: |
-          mkdir -p signed-artifacts
-          cp -r artifacts signed-artifacts/
-          cp -r diamond-abi signed-artifacts/
-          cp -r diamond-typechain-types signed-artifacts/
-          cp lcov.info signed-artifacts/ || true
-
-          # Create manifest with build info
-          cat > signed-artifacts/manifest.json << EOF
-          {
-            "project": "gnus-dao",
-            "version": "${{ github.sha }}",
-            "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "repository": "${{ github.repository }}",
-            "ref": "${{ github.ref }}",
-            "workflow": "${{ github.workflow }}",
-            "run_id": "${{ github.run_id }}",
-            "run_attempt": "${{ github.run_attempt }}"
-          }
-          EOF
-
-      - name: Generate artifact signature
-        run: |
-          # Create a simple signature using sha256 of the manifest
-          MANIFEST_HASH=$(sha256sum signed-artifacts/manifest.json | cut -d' ' -f1)
-          echo "${MANIFEST_HASH}" > signed-artifacts/manifest.sha256
+          # Use the comprehensive TypeScript signing script
+          npm run sign-artifacts
 
       - name: Upload signed artifacts
         uses: actions/upload-artifact@v4
         with:
           name: signed-artifacts-${{ github.sha }}
-          path: signed-artifacts/
+          path: scripts/devops/signed-artifacts/
           retention-days: 90
 
   # Final validation and summary

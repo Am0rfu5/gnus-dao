@@ -66,9 +66,147 @@ Multi-chain testing configuration and network settings.
 
 CI-specific performance monitoring and metrics collection.
 
-### scripts/sign-artifacts.js
+### scripts/sign-artifacts.ts
 
-Cryptographic signing and provenance generation for build artifacts.
+**TypeScript-based cryptographic signing and provenance generation for build artifacts**
+
+The `sign-artifacts.ts` script implements enterprise-grade artifact signing and provenance tracking for the GNUS-DAO CI/CD pipeline. It provides cryptographic integrity verification, build chain provenance, and tamper-evident artifact management.
+
+#### Core Functionality
+
+**Artifact Signing Process:**
+1. **Provenance Generation**: Collects comprehensive build metadata including Git commit, Node.js version, platform details, and dependency information
+2. **Cryptographic Signing**: Creates SHA256-based digital signatures with deterministic hashing for reproducible verification
+3. **Artifact Integrity**: Calculates directory-level hashes for all build outputs (artifacts, diamond-abi, diamond-typechain-types)
+4. **Verification Script Generation**: Automatically creates TypeScript-based verification tools for downstream consumers
+
+**Key Features:**
+- **Deterministic Hashing**: Uses sorted file enumeration and consistent hash calculation for reproducible signatures
+- **Multi-Artifact Support**: Handles complex artifact structures including nested directories and multiple output types
+- **Dependency Tracking**: Records package counts, Yarn lockfile existence, and lockfile hashes for supply chain verification
+- **Build Environment Capture**: Logs Node.js version, platform, and architecture for environment reproducibility
+- **Tamper Detection**: Enables detection of any modifications to signed artifacts through hash verification
+
+#### Generated Outputs
+
+**Signed Artifacts Directory Structure:**
+```
+scripts/devops/signed-artifacts/
+├── artifacts/                    # Copied contract artifacts
+├── diamond-abi/                  # Diamond proxy ABI files
+├── diamond-typechain-types/      # TypeScript type definitions
+├── typechain-types/              # Standard contract types
+├── provenance.json               # Comprehensive build provenance
+├── artifacts.sig                 # Cryptographic signature
+└── verify.ts                     # TypeScript verification tool
+```
+
+**Provenance Data Structure:**
+```typescript
+interface ProvenanceData {
+  project: string;              // Project identifier
+  version: string;              // Git commit hash
+  timestamp: string;            // ISO 8601 build timestamp
+  build: {                      // Build environment details
+    node_version: string;
+    platform: string;
+    arch: string;
+  };
+  artifacts: {                  // Artifact integrity data
+    [artifactName: string]: {
+      path: string;
+      hash: string;             // SHA256 directory hash
+      fileCount: number;
+    };
+  };
+  dependencies: {               // Dependency verification
+    package_count: number;
+    yarn_lock_exists: boolean;
+    yarn_lock_hash: string | null;
+  };
+}
+```
+
+#### Verification Capabilities
+
+**Signature Verification:**
+- Recreates provenance hash using identical algorithm and salt
+- Compares calculated signature with stored signature
+- Validates build environment and artifact integrity
+
+**Integrity Checking:**
+- Verifies all artifact files remain unmodified
+- Recalculates directory hashes for comparison
+- Detects file additions, deletions, or modifications
+
+**Verification Commands:**
+```bash
+# Verify cryptographic signature
+npx ts-node scripts/devops/signed-artifacts/verify.ts verify
+
+# Check artifact integrity
+npx ts-node scripts/devops/signed-artifacts/verify.ts integrity
+```
+
+#### Security Implementation
+
+**Cryptographic Methods:**
+- **Hash Algorithm**: SHA256 for all cryptographic operations
+- **Signature Salt**: Project-specific salt ("GNUS-DAO-SIGNATURE-SALT") for additional entropy
+- **Deterministic Ordering**: JSON key sorting ensures consistent hashing across environments
+
+**Integrity Protections:**
+- **File Filtering**: Excludes irrelevant files (.log, .tmp, .DS_Store, node_modules)
+- **Directory Recursion**: Comprehensive scanning of nested artifact structures
+- **Hash Verification**: Directory-level hashing prevents undetected modifications
+
+#### Integration with CI/CD Pipeline
+
+**Pipeline Integration:**
+- Executed in the `artifacts` job after successful compilation
+- Generates signed outputs for deployment verification
+- Provides provenance data for audit trails and compliance
+
+**Deployment Verification:**
+- Downstream deployment systems can verify artifact integrity
+- Enables automated rejection of tampered artifacts
+- Supports SLSA (Supply Chain Levels for Software Artifacts) compliance
+
+**Audit Trail:**
+- Complete build chain traceability from source to deployment
+- Cryptographic proof of build environment and dependencies
+- Timestamped signatures for temporal verification
+
+#### Usage in Development Workflow
+
+**Local Development:**
+```bash
+# Generate signed artifacts locally
+npm run sign-artifacts
+
+# Verify signed artifacts
+npx ts-node scripts/devops/signed-artifacts/verify.ts verify
+```
+
+**CI/CD Integration:**
+- Automatic execution in GitHub Actions workflow
+- Integration with artifact storage and distribution systems
+- Support for automated deployment verification gates
+
+#### Error Handling and Diagnostics
+
+**Common Error Scenarios:**
+- **Missing Provenance File**: Indicates signing process failure
+- **Signature Mismatch**: Potential tampering or environment differences
+- **Hash Verification Failure**: Artifact modification after signing
+- **Missing Artifact Directories**: Build process incomplete
+
+**Diagnostic Information:**
+- Detailed provenance display including all build metadata
+- File-by-file integrity reporting
+- Clear error messages with suggested remediation steps
+
+This artifact signing system provides the cryptographic foundation for secure software supply chain management in the GNUS-DAO project, ensuring that deployed smart contracts can be verified from source to execution.
 
 ## Environment Variables
 
