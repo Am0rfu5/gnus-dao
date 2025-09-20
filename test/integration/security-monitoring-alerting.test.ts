@@ -37,15 +37,16 @@ describe('Security Monitoring and Alerting System', () => {
 	describe('Security Monitoring Webhook CLI', () => {
 		it('should process test events via CLI', (done: Mocha.Done) => {
 			const child: ChildProcess = spawn(
-				'node',
+				'npx',
 				[
+					'ts-node',
 					path.join(
 						__dirname,
 						'..',
 						'..',
 						'scripts',
 						'devops',
-						'security-monitoring-webhook.js',
+						'security-monitoring-webhook.ts',
 					),
 					'process',
 				],
@@ -68,15 +69,16 @@ describe('Security Monitoring and Alerting System', () => {
 
 		it('should show status via CLI', (done: Mocha.Done) => {
 			const child: ChildProcess = spawn(
-				'node',
+				'npx',
 				[
+					'ts-node',
 					path.join(
 						__dirname,
 						'..',
 						'..',
 						'scripts',
 						'devops',
-						'security-monitoring-webhook.js',
+						'security-monitoring-webhook.ts',
 					),
 					'status',
 				],
@@ -360,7 +362,7 @@ describe('Security Monitoring and Alerting System', () => {
 			const scripts: { [key: string]: string } = packageJson.scripts;
 
 			expect(scripts['security-webhook']).to.equal(
-				'node scripts/devops/security-monitoring-webhook.js',
+				'npx ts-node scripts/devops/security-monitoring-webhook.ts',
 			);
 			expect(scripts['security-alerting']).to.equal(
 				'npx ts-node scripts/devops/security-alerting.ts',
@@ -381,7 +383,7 @@ describe('Security Monitoring and Alerting System', () => {
 		it('should create required directories', () => {
 			// Test that scripts create their required directories
 			const scripts: string[] = [
-				'security-monitoring-webhook.js',
+				'security-monitoring-webhook.ts',
 				'security-alerting.ts',
 				'incident-response.ts',
 				'security-health-checks.ts',

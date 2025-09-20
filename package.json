@@ -36,7 +36,7 @@
     "sigstore-verify": "npx ts-node scripts/devops/sigstore-integration.ts verify-all",
     "supply-chain-assess": "node scripts/devops/supply-chain-risk-assessment.js assess",
     "supply-chain-quick": "node scripts/devops/supply-chain-risk-assessment.js quick",
-    "security-webhook": "node scripts/devops/security-monitoring-webhook.js",
+    "security-webhook": "npx ts-node scripts/devops/security-monitoring-webhook.ts",
     "security-alerting": "npx ts-node scripts/devops/security-alerting.ts",
     "security-metrics": "npx ts-node scripts/devops/security-metrics-dashboard.ts",
     "ci-performance-dashboard": "node scripts/devops/ci-performance-dashboard.js",
