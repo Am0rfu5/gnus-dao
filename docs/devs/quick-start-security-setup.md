@@ -223,8 +223,8 @@ git push origin test-security-setup
 
 ```bash
 # Test security monitoring scripts
-yarn security:webhook --help
-yarn security:alert --help
+yarn security-webhook --help
+yarn security-alerting status
 yarn health-check
 ```
 
