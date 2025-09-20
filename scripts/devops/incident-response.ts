@@ -217,9 +217,12 @@ class IncidentResponseSystem {
 	 * Update incident status
 	 */
 	async updateIncident(incidentId: string, updates: Partial<Incident>): Promise<Incident> {
-		const incident = await this.loadIncident(incidentId);
+		// Validate incident ID before processing
+		const sanitizedId = this.sanitizeIncidentId(incidentId);
+
+		const incident = await this.loadIncident(sanitizedId);
 		if (!incident) {
-			throw new Error(`Incident ${incidentId} not found`);
+			throw new Error(`Incident ${sanitizedId} not found`);
 		}
 
 		// Update incident
@@ -241,7 +244,7 @@ class IncidentResponseSystem {
 		// Handle status-specific actions
 		await this.handleStatusChange(incident, updates.status!);
 
-		this.log(`📝 Incident updated: ${incidentId} - ${updates.status}`);
+		this.log(`📝 Incident updated: ${sanitizedId} - ${updates.status}`);
 		return incident;
 	}
 
@@ -590,22 +593,98 @@ class IncidentResponseSystem {
 	}
 
 	/**
+	 * Validate incident ID to prevent path traversal attacks
+	 */
+	validateIncidentId(incidentId: string): boolean {
+		// Only allow alphanumeric characters, hyphens, and underscores
+		// Must start with INC- followed by timestamp and random string
+		// Explicitly prevent path traversal characters
+		if (!incidentId || typeof incidentId !== 'string') {
+			return false;
+		}
+
+		// Check for path traversal characters
+		const forbiddenChars = ['/', '\\', '..', '.', '\0'];
+		for (const char of forbiddenChars) {
+			if (incidentId.includes(char)) {
+				return false;
+			}
+		}
+
+		const incidentIdRegex = /^INC-\d+-[A-F0-9]+$/;
+		return incidentIdRegex.test(incidentId) && incidentId.length <= 50;
+	}
+
+	/**
+	 * Sanitize incident ID input
+	 */
+	sanitizeIncidentId(incidentId: string): string {
+		if (!this.validateIncidentId(incidentId)) {
+			throw new Error(`Invalid incident ID format: ${incidentId}`);
+		}
+		return incidentId;
+	}
+
+	/**
 	 * Save incident to file
 	 */
 	async saveIncident(incident: Incident): Promise<void> {
-		const fileName = `incident-${incident.id}.json`;
-		const filePath = path.join(this.incidentsDir, fileName);
+		// Validate incident ID before using it in file operations
+		const sanitizedId = this.sanitizeIncidentId(incident.id);
 
-		fs.mkdirSync(path.dirname(filePath), { recursive: true });
-		fs.writeFileSync(filePath, JSON.stringify(incident, null, 2));
+		const fileName = `incident-${sanitizedId}.json`;
+		// Use path.basename to ensure we only get the filename, preventing directory traversal
+		const safeFileName = path.basename(fileName);
+		const filePath = path.join(this.incidentsDir, safeFileName);
+
+		// Ensure the file path is within the expected directory
+		const resolvedPath = path.resolve(filePath);
+		const resolvedDir = path.resolve(this.incidentsDir);
+		if (!resolvedPath.startsWith(resolvedDir)) {
+			throw new Error('Invalid file path: path traversal detected');
+		}
+
+		// Additional check: ensure the filename matches expected pattern
+		if (!safeFileName.match(/^incident-INC-\d+-[A-F0-9]+\.json$/)) {
+			throw new Error('Invalid filename pattern');
+		}
+
+		try {
+			fs.mkdirSync(path.dirname(filePath), { recursive: true });
+			fs.writeFileSync(filePath, JSON.stringify(incident, null, 2));
+			this.log(`Incident ${sanitizedId} saved successfully`, 'info');
+		} catch (error) {
+			this.log(
+				`Error saving incident ${sanitizedId}: ${(error as Error).message}`,
+				'error',
+			);
+			throw error;
+		}
 	}
 
 	/**
 	 * Load incident from file
 	 */
 	async loadIncident(incidentId: string): Promise<Incident | null> {
-		const fileName = `incident-${incidentId}.json`;
-		const filePath = path.join(this.incidentsDir, fileName);
+		// Validate incident ID before using it in file operations
+		const sanitizedId = this.sanitizeIncidentId(incidentId);
+
+		const fileName = `incident-${sanitizedId}.json`;
+		// Use path.basename to ensure we only get the filename, preventing directory traversal
+		const safeFileName = path.basename(fileName);
+		const filePath = path.join(this.incidentsDir, safeFileName);
+
+		// Ensure the file path is within the expected directory
+		const resolvedPath = path.resolve(filePath);
+		const resolvedDir = path.resolve(this.incidentsDir);
+		if (!resolvedPath.startsWith(resolvedDir)) {
+			throw new Error('Invalid file path: path traversal detected');
+		}
+
+		// Additional check: ensure the filename matches expected pattern
+		if (!safeFileName.match(/^incident-INC-\d+-[A-F0-9]+\.json$/)) {
+			throw new Error('Invalid filename pattern');
+		}
 
 		try {
 			if (fs.existsSync(filePath)) {
@@ -613,7 +692,7 @@ class IncidentResponseSystem {
 			}
 		} catch (error) {
 			this.log(
-				`Error loading incident ${incidentId}: ${(error as Error).message}`,
+				`Error loading incident ${sanitizedId}: ${(error as Error).message}`,
 				'error',
 			);
 		}
@@ -630,11 +709,19 @@ class IncidentResponseSystem {
 			const files = fs.readdirSync(this.incidentsDir);
 			for (const file of files) {
 				if (file.startsWith('incident-') && file.endsWith('.json')) {
-					const incident = JSON.parse(
-						fs.readFileSync(path.join(this.incidentsDir, file), 'utf8'),
-					);
-					if (incident.status === 'active') {
-						incidents.push(incident);
+					try {
+						const incident: Incident = JSON.parse(
+							fs.readFileSync(path.join(this.incidentsDir, file), 'utf8'),
+						);
+						// Validate incident ID format before using
+						if (this.validateIncidentId(incident.id) && incident.status === 'active') {
+							incidents.push(incident);
+						}
+					} catch (parseError) {
+						this.log(
+							`Error parsing incident file ${file}: ${(parseError as Error).message}`,
+							'error',
+						);
 					}
 				}
 			}
@@ -749,11 +836,34 @@ async function main(): Promise<void> {
 
 	switch (command) {
 		case 'create':
+			const title = args[1] || 'Security Incident';
+			const description = args[2] || 'Incident created via CLI';
+			const severity = (args[3] as 'low' | 'medium' | 'high' | 'critical') || 'medium';
+			const category = args[4] || 'general';
+
+			// Validate inputs to prevent injection attacks
+			if (typeof title !== 'string' || title.length > 200) {
+				console.error('Error: Invalid title');
+				process.exit(1);
+			}
+			if (typeof description !== 'string' || description.length > 1000) {
+				console.error('Error: Invalid description');
+				process.exit(1);
+			}
+			if (!['low', 'medium', 'high', 'critical'].includes(severity)) {
+				console.error('Error: Invalid severity (must be: low, medium, high, critical)');
+				process.exit(1);
+			}
+			if (typeof category !== 'string' || category.length > 50) {
+				console.error('Error: Invalid category');
+				process.exit(1);
+			}
+
 			const incidentData: IncidentData = {
-				title: args[1] || 'Security Incident',
-				description: args[2] || 'Incident created via CLI',
-				severity: (args[3] as 'low' | 'medium' | 'high' | 'critical') || 'medium',
-				category: args[4] || 'general',
+				title,
+				description,
+				severity,
+				category,
 			};
 			const incident = await incidentSystem.createIncident(incidentData);
 			console.log(`Created incident: ${incident.id}`);
@@ -762,7 +872,25 @@ async function main(): Promise<void> {
 
 		case 'update':
 			const incidentId = args[1];
+			if (!incidentId) {
+				console.error('Error: incident-id is required for update command');
+				process.exit(1);
+			}
+			// Validate incident ID format at CLI level
+			if (!incidentSystem.validateIncidentId(incidentId)) {
+				console.error('Error: Invalid incident ID format');
+				process.exit(1);
+			}
 			const updateStatus = args[2] as Incident['status'];
+			if (
+				!updateStatus ||
+				!['active', 'investigating', 'resolved', 'closed'].includes(updateStatus)
+			) {
+				console.error(
+					'Error: Valid status is required (active, investigating, resolved, closed)',
+				);
+				process.exit(1);
+			}
 			await incidentSystem.updateIncident(incidentId, { status: updateStatus });
 			console.log(`Updated incident: ${incidentId}`);
 			process.exit(0);
