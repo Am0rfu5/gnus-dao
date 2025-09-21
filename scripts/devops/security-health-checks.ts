@@ -21,6 +21,19 @@ type CheckName =
 	| 'diamond-integrity'
 	| 'network-security';
 
+interface AuditError extends Error {
+	stdout: Buffer;
+	stderr: Buffer;
+	status: number;
+}
+
+interface DiamondFacet {
+	name: string;
+	selectors?: string[];
+	priority?: number;
+	versions?: Record<string, unknown>;
+}
+
 interface Recommendation {
 	priority: 'critical' | 'high' | 'medium' | 'low';
 	action: string;
@@ -545,7 +558,7 @@ class SecurityHealthChecks {
 			const allSelectors = new Set();
 			const usedSelectors = new Set();
 
-			facets.forEach((facet: any) => {
+			facets.forEach((facet: DiamondFacet) => {
 				if (facet.selectors) {
 					facet.selectors.forEach((selector: string) => {
 						allSelectors.add(selector);

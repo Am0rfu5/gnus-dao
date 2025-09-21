@@ -56,7 +56,7 @@ interface ComponentRisk {
 	component: string;
 	riskScore: number;
 	riskLevel: 'critical' | 'high' | 'medium' | 'low' | 'acceptable';
-	details: any;
+	details: unknown;
 }
 
 interface InfrastructureCheck {

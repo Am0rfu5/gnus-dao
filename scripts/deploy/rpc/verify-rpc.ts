@@ -19,11 +19,15 @@ import {
 	createLegacyCommand,
 	createQuickCommand,
 } from './common';
+import { Diamond } from 'diamonds';
 
 /**
  * Validates contract ABIs against deployed contracts
  */
-async function validateABIs(diamond: any, provider: ethers.JsonRpcProvider): Promise<void> {
+async function validateABIs(
+	diamond: Diamond,
+	provider: ethers.JsonRpcProvider,
+): Promise<void> {
 	console.log(chalk.blue('\n🔍 Validating contract ABIs...'));
 
 	const deployedData = diamond.getDeployedDiamondData();
@@ -60,7 +64,7 @@ async function validateABIs(diamond: any, provider: ethers.JsonRpcProvider): Pro
  * Validates function selectors against on-chain data
  */
 async function validateSelectors(
-	diamond: any,
+	diamond: Diamond,
 	provider: ethers.JsonRpcProvider,
 ): Promise<void> {
 	console.log(chalk.blue('\n🔍 Validating function selectors...'));
@@ -136,7 +140,7 @@ async function validateSelectors(
  * Compares stored deployment data with on-chain state
  */
 async function compareOnChainState(
-	diamond: any,
+	diamond: Diamond,
 	provider: ethers.JsonRpcProvider,
 ): Promise<void> {
 	console.log(chalk.blue('\n🔍 Comparing on-chain state with deployment data...'));

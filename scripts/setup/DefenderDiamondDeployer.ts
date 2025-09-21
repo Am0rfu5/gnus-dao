@@ -176,7 +176,7 @@ export class DefenderDiamondDeployer {
 
 			// Set provider and signer on diamond
 			if (this.provider) {
-				this.diamond.setProvider(this.provider as any);
+				this.diamond.setProvider(this.provider as JsonRpcProvider | HardhatEthersProvider);
 			}
 			if (this.signer) {
 				this.diamond.setSigner(this.signer);
@@ -213,7 +213,8 @@ export class DefenderDiamondDeployer {
 	 */
 	private async setupProviderAndSigner(): Promise<void> {
 		// Use provided provider or default to ethers provider
-		this.provider = this.config.provider || (ethers.provider as any);
+		this.provider =
+			this.config.provider || (ethers.provider as JsonRpcProvider | HardhatEthersProvider);
 
 		// Use provided signer or get from ethers
 		if (this.config.signer) {

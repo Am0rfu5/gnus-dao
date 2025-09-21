@@ -18,11 +18,12 @@ import {
 	createLegacyCommand,
 	createQuickCommand,
 } from './common';
+import { Diamond } from 'diamonds';
 
 /**
  * Analyzes what will be upgraded
  */
-async function analyzeUpgrade(diamond: any): Promise<void> {
+async function analyzeUpgrade(diamond: Diamond): Promise<void> {
 	console.log(chalk.blue('\n📊 Analyzing upgrade requirements...'));
 
 	try {

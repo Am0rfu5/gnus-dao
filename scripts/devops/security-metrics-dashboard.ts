@@ -99,6 +99,44 @@ interface SummaryMetrics {
 	health: HealthSummary;
 }
 
+interface DetailedMetrics {
+	dailyBreakdown: Array<{
+		date: string;
+		events: number;
+		alerts: number;
+		incidents: number;
+	}>;
+	topEventTypes: Array<{
+		type: string;
+		count: number;
+	}>;
+	topAlertTypes: Array<{
+		type: string;
+		count: number;
+	}>;
+	responseTimes: { [key: string]: number };
+	compliance: { [key: string]: boolean };
+}
+
+interface MetricsSummary {
+	totalMetrics: number;
+	totalIncidents: number;
+	totalAlerts: number;
+	lastUpdated: string;
+}
+
+interface ChartSeriesData {
+	x: string | number;
+	y: number;
+}
+
+interface ChartSeries {
+	name: string;
+	data?: ChartSeriesData[];
+	value?: number;
+	color?: string;
+}
+
 interface TrendData {
 	change: number;
 	direction: 'increasing' | 'decreasing' | 'stable';
@@ -123,18 +161,8 @@ interface ChartData {
 	title: string;
 	xAxis?: string;
 	yAxis?: string;
-	series?: Array<
-		| {
-				name: string;
-				data: Array<{ x: string | number; y: number }>;
-		  }
-		| {
-				name: string;
-				value: number;
-				color: string;
-		  }
-	>;
-	data?: any[];
+	series?: ChartSeries[];
+	data?: ChartSeriesData[];
 }
 
 interface SecurityReport {
@@ -142,7 +170,7 @@ interface SecurityReport {
 	period: string;
 	title: string;
 	summary: SummaryMetrics;
-	metrics: any;
+	metrics: DetailedMetrics;
 	trends: Trends;
 	recommendations: Recommendation[];
 	charts?: { [key: string]: ChartData };
@@ -222,7 +250,13 @@ class SecurityMetricsDashboard {
 			period,
 			title: `GNUS-DAO Security Metrics Report - ${period}`,
 			summary: {} as SummaryMetrics,
-			metrics: {},
+			metrics: {
+				dailyBreakdown: [],
+				topEventTypes: [],
+				topAlertTypes: [],
+				responseTimes: {},
+				compliance: {},
+			},
 			trends: {} as Trends,
 			recommendations: [],
 		};
@@ -399,9 +433,9 @@ class SecurityMetricsDashboard {
 	/**
 	 * Generate detailed metrics
 	 */
-	private generateDetailedMetrics(metrics: MetricsData, period: string): any {
+	private generateDetailedMetrics(metrics: MetricsData, period: string): DetailedMetrics {
 		const periodDays: number = this.getPeriodDays(period);
-		const detailed: any = {
+		const detailed: DetailedMetrics = {
 			dailyBreakdown: [],
 			topEventTypes: [],
 			topAlertTypes: [],
@@ -438,7 +472,8 @@ class SecurityMetricsDashboard {
 		});
 		detailed.topEventTypes = Object.entries(eventCounts)
 			.sort(([, a], [, b]) => b - a)
-			.slice(0, 10);
+			.slice(0, 10)
+			.map(([type, count]) => ({ type, count }));
 
 		return detailed;
 	}
@@ -1033,7 +1068,7 @@ ${Object.entries(report.trends)
 	/**
 	 * Get metrics summary
 	 */
-	getMetricsSummary(): any {
+	getMetricsSummary(): MetricsSummary {
 		const metrics: MetricsData = this.loadMetricsData();
 		const incidents: Incident[] = this.loadIncidentsData();
 		const alerts: Alert[] = this.loadAlertsData();
@@ -1042,7 +1077,7 @@ ${Object.entries(report.trends)
 			totalMetrics: Object.keys(metrics).length,
 			totalIncidents: incidents.length,
 			totalAlerts: alerts.length,
-			lastUpdated: this.getLastReportTime(),
+			lastUpdated: this.getLastReportTime() || new Date().toISOString(),
 		};
 	}
 

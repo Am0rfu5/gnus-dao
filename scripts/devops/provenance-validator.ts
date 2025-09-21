@@ -54,11 +54,11 @@ interface PackageData {
 	dependencies?: Record<string, string>;
 	devDependencies?: Record<string, string>;
 	scripts?: Record<string, string>;
-	binary?: any;
-	bin?: any;
+	binary?: string | Record<string, string>;
+	bin?: string | Record<string, string>;
 	license?: string;
 	repository?: string | { url?: string };
-	[key: string]: any;
+	[key: string]: unknown;
 }
 
 class ProvenanceValidator {

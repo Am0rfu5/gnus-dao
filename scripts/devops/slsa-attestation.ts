@@ -44,6 +44,13 @@ interface ResolvedDependency {
 	};
 }
 
+interface BuildByproduct {
+	uri: string;
+	digest?: {
+		sha256: string;
+	};
+}
+
 interface RunDetails {
 	builder: {
 		id: string;
@@ -53,7 +60,7 @@ interface RunDetails {
 		startedOn: string;
 		finishedOn: string;
 	};
-	byproducts: any[];
+	byproducts: BuildByproduct[];
 }
 
 interface ProvenancePredicate {
@@ -95,10 +102,18 @@ interface SLSAStatus {
 	lastAttestation: string | null;
 }
 
+interface BuildConfigSource {
+	uri?: string;
+	digest?: {
+		sha256: string;
+	};
+	entryPoint?: string;
+}
+
 interface AttestationOptions {
 	buildType?: string;
 	builderId?: string;
-	buildConfigSource?: any;
+	buildConfigSource?: BuildConfigSource;
 }
 
 class SLSAAttestation {

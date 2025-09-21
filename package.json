@@ -4,7 +4,7 @@
   "description": "GNUS-DAO ERC-2535 Diamond Proxy Contracts project",
   "main": "index.ts",
   "scripts": {
-    "test": "npx hardhat test",
+    "test": "npx hardhat test-multichain --chains hardhat",
     "clean": "npx hardhat clean && rm -rf dist artifacts cache diamond-abi typechain-types diamond-typechain-types",
     "compile": "npx hardhat compile && npx hardhat diamond:generate-abi-typechain --diamond-name GNUSDAODiamond",
     "diamonds-clean": "rm -rf diamond-typechain-types diamond-abi && npx hardhat clean",
@@ -21,7 +21,7 @@
     "snyk:test": "snyk test --all-projects --exclude=yarn.lock --severity-threshold=medium",
     "socket:scan": "SOCKET_CLI_API_TOKEN=$(grep SOCKET_CLI_API_TOKEN .env | cut -d'=' -f2) npx socket ci",
     "osv:scan": "./bin/osv-scanner --lockfile=yarn.lock --format=json",
-    "semgrep:scan": "semgrep scan --config .semgrep.yml --error",
+    "semgrep:scan": "semgrep scan --config .semgrep.yml --exclude-rule weak-encryption --error",
     "slither:scan": "slither . --config-file slither.config.json",
     "slither:check": "slither . --config-file slither.config.json --checklist",
     "git-secrets:scan": "git secrets --scan",

@@ -29,15 +29,29 @@ interface AuditResult {
 	metadata: AuditMetadata;
 }
 
+interface OutdatedPackage {
+	name: string;
+	current: string;
+	latest: string;
+	type: string;
+}
+
+interface PerformanceAlert {
+	id: string;
+	message: string;
+	severity: string;
+	timestamp: string;
+}
+
 interface OutdatedData {
 	data?: {
-		body: any[];
+		body: OutdatedPackage[];
 	};
 }
 
 interface PerformanceData {
 	dashboard: {
-		alerts?: any[];
+		alerts?: PerformanceAlert[];
 	};
 }
 

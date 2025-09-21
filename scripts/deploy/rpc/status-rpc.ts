@@ -7,7 +7,10 @@
 
 import chalk from 'chalk';
 import { ethers } from 'ethers';
-import { RPCDiamondDeployer } from '../../setup/RPCDiamondDeployer';
+import {
+	RPCDiamondDeployer,
+	RPCDiamondDeployerConfig,
+} from '../../setup/RPCDiamondDeployer';
 import {
 	StatusOptions,
 	setupProgram,
@@ -19,11 +22,12 @@ import {
 	createLegacyCommand,
 	createQuickCommand,
 } from './common';
+import { Diamond } from 'diamonds';
 
 /**
  * Shows deployment configuration details
  */
-async function showConfigDetails(config: any): Promise<void> {
+async function showConfigDetails(config: RPCDiamondDeployerConfig): Promise<void> {
 	console.log(chalk.blue('\n📋 Configuration Details'));
 	console.log(chalk.blue('========================'));
 
@@ -46,7 +50,7 @@ async function showConfigDetails(config: any): Promise<void> {
 /**
  * Shows detailed facet information
  */
-async function showFacetDetails(diamond: any): Promise<void> {
+async function showFacetDetails(diamond: Diamond): Promise<void> {
 	console.log(chalk.blue('\n🔧 Deployed Facets'));
 	console.log(chalk.blue('=================='));
 
@@ -80,7 +84,7 @@ async function showFacetDetails(diamond: any): Promise<void> {
 /**
  * Shows function selector details
  */
-async function showSelectorDetails(diamond: any): Promise<void> {
+async function showSelectorDetails(diamond: Diamond): Promise<void> {
 	console.log(chalk.blue('\n🎯 Function Selectors'));
 	console.log(chalk.blue('====================='));
 
@@ -107,7 +111,7 @@ async function showSelectorDetails(diamond: any): Promise<void> {
  * Performs on-chain validation of deployment status
  */
 async function performOnChainValidation(
-	diamond: any,
+	diamond: Diamond,
 	provider: ethers.JsonRpcProvider,
 ): Promise<void> {
 	console.log(chalk.blue('\n🔗 On-Chain Validation'));

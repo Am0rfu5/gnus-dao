@@ -47,11 +47,18 @@ export interface IDeployedContractFacetSelectors {
 export type FacetSelectorsDeployed = IDeployedFacetSelectors &
 	IDeployedContractFacetSelectors;
 
+export interface IExternalLibraryInfo {
+	address?: string;
+	version?: string;
+}
+
+export type ExternalLibraries = Record<string, IExternalLibraryInfo>;
+
 export interface INetworkDeployInfo {
 	DiamondAddress: string;
 	DeployerAddress: string;
 	FacetDeployedInfo: FacetDeployedInfo;
-	ExternalLibraries?: any;
+	ExternalLibraries?: ExternalLibraries;
 	protocolVersion?: number;
 	provider?: JsonRpcProvider | undefined;
 }
@@ -140,8 +147,8 @@ export const diamondCutFuncAbi = {
 };
 
 export interface IDefenderViaInfo {
-	via: any;
-	viaType: any;
+	via: string;
+	viaType: 'Safe' | 'EOA';
 }
 
 export function createPreviousVersionRecordWithMap(
