@@ -407,6 +407,133 @@ jobs:
 
           echo "✅ Code security scan completed"
 
+  # Solidity Static Analysis with Slither
+  solidity-security:
+    name: Solidity Static Analysis (Slither)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [dependency-security, code-security]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Setup Yarn
+        run: |
+          npm install -g yarn@${YARN_VERSION:-1.22.19}
+          yarn config set cache-folder ~/.yarn/cache
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Setup Hardhat cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.hardhat/cache
+          key: hardhat-${{ runner.os }}-${{ hashFiles('hardhat.config.ts', 'contracts/**/*.sol') }}
+          restore-keys: |
+            hardhat-${{ runner.os }}-
+
+      - name: Compile contracts
+        run: yarn compile
+
+      - name: Install Slither
+        run: pip install slither-analyzer
+
+      - name: Run Slither Analysis
+        id: slither-scan
+        continue-on-error: true
+        run: |
+          echo "🐍 Running Slither static analysis..."
+
+          # Run Slither and capture output
+          if yarn slither:scan > slither-results.txt 2>&1; then
+            echo "✅ Slither analysis completed successfully"
+            echo "passed=true" >> $GITHUB_OUTPUT
+            echo "high=0" >> $GITHUB_OUTPUT
+            echo "medium=0" >> $GITHUB_OUTPUT
+            echo "low=0" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ Slither found issues"
+
+            # Parse Slither output for severity counts
+            HIGH=$(grep -c "HIGH" slither-results.txt || echo 0)
+            MEDIUM=$(grep -c "MEDIUM" slither-results.txt || echo 0)
+            LOW=$(grep -c "LOW" slither-results.txt || echo 0)
+
+            echo "passed=false" >> $GITHUB_OUTPUT
+            echo "high=$HIGH" >> $GITHUB_OUTPUT
+            echo "medium=$MEDIUM" >> $GITHUB_OUTPUT
+            echo "low=$LOW" >> $GITHUB_OUTPUT
+
+            echo "📊 Slither Results:"
+            echo "  High: $HIGH"
+            echo "  Medium: $MEDIUM"
+            echo "  Low: $LOW"
+          fi
+
+      - name: Generate Slither Report
+        run: |
+          cat > solidity-security-report.json << EOF
+          {
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "repository": "${{ github.repository }}",
+            "ref": "${{ github.ref }}",
+            "sha": "${{ github.sha }}",
+            "tool": "slither",
+            "results": {
+              "passed": ${{ steps.slither-scan.outputs.passed == 'true' }},
+              "high_severity": ${{ steps.slither-scan.outputs.high || 0 }},
+              "medium_severity": ${{ steps.slither-scan.outputs.medium || 0 }},
+              "low_severity": ${{ steps.slither-scan.outputs.low || 0 }}
+            },
+            "thresholds": {
+              "high_fail_threshold": 0,
+              "medium_warning_threshold": 5
+            }
+          }
+          EOF
+
+      - name: Upload Slither Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidity-security-results
+          path: |
+            solidity-security-report.json
+            slither-results.txt
+          retention-days: 30
+
+      - name: Slither Security Check
+        run: |
+          HIGH_ISSUES=${{ steps.slither-scan.outputs.high || 0 }}
+          MEDIUM_ISSUES=${{ steps.slither-scan.outputs.medium || 0 }}
+
+          if [ "$HIGH_ISSUES" -gt 0 ]; then
+            echo "❌ High-severity Solidity security issues found - failing build"
+            exit 1
+          fi
+
+          if [ "$MEDIUM_ISSUES" -gt 5 ] && [ "${{ env.FAIL_ON_WARNINGS }}" = "true" ]; then
+            echo "❌ Medium-severity Solidity security issues exceed threshold - failing build"
+            exit 1
+          elif [ "$MEDIUM_ISSUES" -gt 5 ]; then
+            echo "⚠️ Medium-severity Solidity security issues ($MEDIUM_ISSUES) exceed recommended threshold"
+          fi
+
+          echo "✅ Solidity static analysis completed"
+
   # Supply Chain Security
   supply-chain:
     name: Supply Chain Security
@@ -426,7 +553,7 @@ jobs:
 
       - name: OSSF Scorecard
         id: scorecard
-        uses: ossf/scorecard-action@v2
+        uses: ossf/scorecard-action@v2.4.2
         with:
           results_file: results.sarif
           results_format: sarif

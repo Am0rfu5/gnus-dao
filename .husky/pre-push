@@ -38,6 +38,13 @@ if ! yarn semgrep:scan > /dev/null 2>&1; then
     success=false
 fi
 
+# Run Solidity static analysis with Slither
+echo "🐍 Running Solidity static analysis with Slither..."
+if ! yarn slither:scan > /dev/null 2>&1; then
+    echo "❌ Slither analysis found issues. Please fix before pushing."
+    success=false
+fi
+
 # Run secret detection
 echo "🔑 Running secret detection..."
 if ! yarn git-secrets:scan > /dev/null 2>&1; then
