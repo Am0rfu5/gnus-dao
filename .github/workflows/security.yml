@@ -35,6 +35,7 @@ env:
   NODE_VERSION: '18.19.0'
   SCAN_TYPE: ${{ github.event.inputs.scan_type || 'full' }}
   FAIL_ON_WARNINGS: ${{ github.event.inputs.fail_on_warnings == 'true' && 'true' || 'false' }}
+  SOCKET_CLI_API_TOKEN: ${{ secrets.SOCKET_CLI_API_TOKEN }}
 
 permissions:
   contents: read

@@ -59,7 +59,7 @@ snyk auth
 ```bash
 # Login to Socket.dev
 socket login
-# Or set SOCKET_SECURITY_API_TOKEN environment variable
+# Or set SOCKET_CLI_API_TOKEN environment variable
 ```
 
 #### Semgrep Setup
