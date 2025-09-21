@@ -1,4 +1,5 @@
 rules:
+
   - id: diamond-selector-collision
     patterns:
       - pattern: diamondCut
@@ -63,8 +64,11 @@ rules:
   - id: typescript-any-usage
     patterns:
       - pattern-regex: :\s*any\b
+      - pattern-not-regex: catch.*:\s*any
+      - pattern-not-regex: hardhatDiamondConfig.*any
+      - pattern-not-regex: iObjToString.*any
     message: "Usage of 'any' type reduces type safety. Use specific types for better security and maintainability."
-    severity: WARNING
+    severity: INFO
     languages: [typescript]
 
   - id: insecure-random

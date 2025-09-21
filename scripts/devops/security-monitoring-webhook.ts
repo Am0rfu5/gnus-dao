@@ -42,7 +42,7 @@ interface WebhookHeaders {
 }
 
 interface WebhookPayload {
-	[key: string]: any;
+	[key: string]: unknown;
 }
 
 interface SecurityAdvisory {
@@ -219,7 +219,7 @@ interface Incident {
 	title: string;
 	description: string;
 	eventId: string;
-	[key: string]: any;
+	[key: string]: unknown;
 }
 
 interface DailyMetrics {
@@ -408,7 +408,7 @@ class SecurityMonitoringWebhook {
 				break;
 
 			case 'push':
-				await this.handlePush(payload as PushPayload, eventId);
+				await this.handlePush(payload as unknown as PushPayload, eventId);
 				break;
 
 			default:
@@ -423,7 +423,8 @@ class SecurityMonitoringWebhook {
 		payload: WebhookPayload,
 		eventId: string,
 	): Promise<void> {
-		const advisory: SecurityAdvisory = payload.security_advisory;
+		const advisory: SecurityAdvisory =
+			payload.security_advisory as unknown as SecurityAdvisory;
 		const severity: string = this.mapSeverity(advisory.severity);
 
 		this.log(`Security advisory: ${advisory.summary} (${severity})`);
@@ -456,7 +457,7 @@ class SecurityMonitoringWebhook {
 		payload: WebhookPayload,
 		eventId: string,
 	): Promise<void> {
-		const alert: DependabotAlert = payload.alert;
+		const alert: DependabotAlert = payload.alert as unknown as DependabotAlert;
 		const severity: string = this.mapSeverity(
 			alert.security_vulnerability?.severity || 'medium',
 		);
@@ -495,7 +496,7 @@ class SecurityMonitoringWebhook {
 		payload: WebhookPayload,
 		eventId: string,
 	): Promise<void> {
-		const alert: SecretScanningAlert = payload.alert;
+		const alert: SecretScanningAlert = payload.alert as unknown as SecretScanningAlert;
 		const severity: 'high' = 'high'; // Secret leaks are always high priority
 
 		this.log(`Secret scanning alert: ${alert.secret_type} in ${alert.path}`);
@@ -528,7 +529,7 @@ class SecurityMonitoringWebhook {
 		payload: WebhookPayload,
 		eventId: string,
 	): Promise<void> {
-		const alert: CodeScanningAlert = payload.alert;
+		const alert: CodeScanningAlert = payload.alert as unknown as CodeScanningAlert;
 		const severity: string = this.mapSeverity(
 			alert.rule?.security_severity_level || 'medium',
 		);
@@ -569,7 +570,8 @@ class SecurityMonitoringWebhook {
 		payload: WebhookPayload,
 		eventId: string,
 	): Promise<void> {
-		const alert: RepositoryVulnerabilityAlert = payload.alert;
+		const alert: RepositoryVulnerabilityAlert =
+			payload.alert as unknown as RepositoryVulnerabilityAlert;
 		const severity: string = this.mapSeverity(
 			alert.security_vulnerability?.severity || 'medium',
 		);
@@ -591,7 +593,7 @@ class SecurityMonitoringWebhook {
 	 * Handle workflow run events (for CI/CD monitoring)
 	 */
 	private async handleWorkflowRun(payload: WebhookPayload, eventId: string): Promise<void> {
-		const workflow: WorkflowRun = payload.workflow_run;
+		const workflow: WorkflowRun = payload.workflow_run as unknown as WorkflowRun;
 
 		if (workflow.conclusion === 'failure') {
 			// Check if it's a security-related failure

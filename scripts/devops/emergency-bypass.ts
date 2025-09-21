@@ -11,6 +11,19 @@ import * as crypto from 'crypto';
 import { execSync, spawnSync } from 'child_process';
 import * as readline from 'readline';
 
+interface BypassRequest {
+	timestamp: string;
+	action: string;
+	user: string;
+	nodeVersion: string;
+	cwd: string;
+	reason?: string;
+	contact?: string;
+	severity: string;
+	bypassId: string;
+	[key: string]: unknown;
+}
+
 interface BypassLogEntry {
 	timestamp: string;
 	action: string;
@@ -21,7 +34,7 @@ interface BypassLogEntry {
 	contact?: string;
 	severity: string;
 	bypassId: string;
-	[key: string]: any;
+	[key: string]: unknown;
 }
 
 interface BypassOptions {
