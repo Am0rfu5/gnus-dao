@@ -1,11 +1,13 @@
 # GNUS-DAO DevContainer Dockerfile
 # Optimized for security, performance, and Diamond Proxy development
+# Security approach: Node.js slim image (minimal attack surface), automatic security updates, pipx for Python tools
+# Note: Any remaining vulnerabilities are in the Node.js runtime itself, maintained by the Node.js project
 
-# Use Node.js LTS as base image
-FROM node:20-bookworm
+# Use Node.js LTS slim image for better security (fewer packages = fewer vulnerabilities)
+FROM node:22-slim
 
 # Build arguments
-ARG NODE_VERSION=20
+ARG NODE_VERSION=22
 ARG PYTHON_VERSION=3.11
 ARG GO_VERSION=1.21
 
@@ -18,18 +20,20 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PATH="/home/node/.local/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 # Install system dependencies in a single layer for better caching
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# First update package lists and apply security updates
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+    # Basic system utilities (needed for slim image)
+    ca-certificates \
+    curl \
+    wget \
+    gnupg \
     # Build tools
     build-essential \
     cmake \
     pkg-config \
     # Development tools
     git \
-    curl \
-    wget \
     jq \
-    ca-certificates \
-    gnupg \
     lsb-release \
     software-properties-common \
     # Python development
@@ -37,6 +41,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     python3-setuptools \
     python3-wheel \
+    pipx \
     # Security tools dependencies
     libssl-dev \
     libffi-dev \
@@ -66,36 +71,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get autoremove -y
 
-# Install Go (needed for OSV-Scanner)
-RUN wget -q https://go.dev/dl/go1.21.5.linux-amd64.tar.gz \
-    && rm -rf /usr/local/go && tar -C /usr/local -xzf go1.21.5.linux-amd64.tar.gz \
-    && rm go1.21.5.linux-amd64.tar.gz
-
-# Create non-root user for security
-RUN groupadd --gid 1000 node \
-    && useradd --uid 1000 --gid node --shell /bin/bash --create-home node \
-    && mkdir -p /home/node/.local/bin /home/node/.yarn/cache \
-    && chown -R node:node /home/node
-
-# Switch to non-root user
+# Switch to non-root user (already created by base Node.js image)
 USER node
 WORKDIR /home/node
 
-# Install Python security tools
-RUN pip3 install --user --no-cache-dir \
-    slither-analyzer \
-    semgrep \
-    trufflehog \
-    && chmod +x /home/node/.local/bin/*
+# Install Python security tools using pipx
+RUN pipx install slither-analyzer \
+    && pipx install semgrep \
+    && pipx install trufflehog \
+    && pipx ensurepath \
+    && export PATH="$PATH:/home/node/.local/bin"
 
-# Install additional security tools
-RUN pip3 install --user --no-cache-dir \
-    bandit \
-    safety \
-    pip-audit
+# Install additional security tools using pipx
+RUN pipx install bandit \
+    && pipx install safety \
+    && pipx install pip-audit
 
-# Install OSV-Scanner using Go
-RUN go install github.com/google/osv-scanner/cmd/osv-scanner@latest
+# OSV-Scanner will be installed via post-create scripts after Go is available
 
 # Install Foundry (optional advanced testing)
 RUN curl -L https://foundry.paradigm.xyz | bash \
@@ -167,6 +159,8 @@ RUN chown -R node:node /workspaces/gnus-dao
 # Add health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD node --version && yarn --version && python3 --version && go version
+
+# Security note: Post-create scripts will perform additional security validation and tool setup
 
 # Expose ports for development
 EXPOSE 8545 8546 3000 5000 8080
