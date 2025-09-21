@@ -95,10 +95,10 @@ class PerformanceMonitor {
 			console.log(`⏱️  ${timingState.hookName} completed in ${duration}ms (${status})`);
 
 			// Performance warnings
-			if (duration > 30000) {
-				// 30 seconds
+			if (duration > 60000) {
+				// 60 seconds
 				console.warn(
-					`⚠️  WARNING: ${timingState.hookName} took longer than 30 seconds (${duration}ms)`,
+					`⚠️  WARNING: ${timingState.hookName} took longer than 60 seconds (${duration}ms)`,
 				);
 				console.warn('   Consider optimizing the hook or using emergency bypass if needed');
 			}
