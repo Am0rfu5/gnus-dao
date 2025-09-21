@@ -1,4 +1,6 @@
-#!/# Check for emergency bypass
+#!/usr/bin/env sh
+
+# Check for emergency bypass
 if [ "$HUSKY_SKIP_HOOKS" = "1" ] || [ "$EMERGENCY_BYPASS" = "1" ]; then
   echo "🚨 SECURITY HOOKS BYPASSED - EMERGENCY MODE"
   echo "   Reason should be documented in emergency bypass log"
@@ -11,15 +13,7 @@ yarn perf-monitor start pre-push
 # Pre-push security validation hook
 echo "🔒 Running comprehensive security validation before push..."
 
-success=truev sh
-. "$(dirname -- "$0")/_/husky.sh"
-
-# Check for emergency bypass
-if [ "$HUSKY_SKIP_HOOKS" = "1" ] || [ "$EMERGENCY_BYPASS" = "1" ]; then
-  echo "� SECURITY HOOKS BYPASSED - EMERGENCY MODE"
-  echo "   Reason should be documented in emergency bypass log"
-  exit 0
-fi
+success=true
 
 # Get the remote and branch information
 remote="$1"
@@ -27,7 +21,7 @@ url="$2"
 
 # Run comprehensive security checks
 echo "📋 Running security audit..."
-if ! yarn audit --audit-level moderate > /dev/null 2>&1; then
+if ! yarn npm audit --severity moderate > /dev/null 2>&1; then
     echo "❌ Security audit failed. Please fix vulnerabilities before pushing."
     success=false
 fi
@@ -52,8 +46,8 @@ if ! yarn git-secrets:scan > /dev/null 2>&1; then
 fi
 
 # Run tests if pushing to main/develop branches
-current_branch=$(git branch --show-current)
-if [[ "$current_branch" == "main" || "$current_branch" == "develop" ]]; then
+current_branch=$(git branch --show-current 2>/dev/null || git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+if [ "$current_branch" = "main" ] || [ "$current_branch" = "develop" ]; then
     echo "🧪 Running tests for protected branch push..."
     if ! yarn test > /dev/null 2>&1; then
         echo "❌ Tests failed. Please fix tests before pushing to protected branch."
