@@ -197,7 +197,7 @@ Automatically prevents committing sensitive data:
 git secrets --scan
 
 # Add custom patterns
-git secrets --add 'PRIVATE_KEY|SECRET_KEY'
+git secrets --add 'PRIVATE_KEY\s*=\s*["'\'']*0x[a-fA-F0-9]{64}["'\'']*'
 ```
 
 ### Security Scanning Pipeline

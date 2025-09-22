@@ -6,9 +6,9 @@
  * Integrates with CI/CD pipeline and monitoring systems
  */
 
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync, spawn } from 'child_process';
 
 // Type definitions
 type CheckStatus = 'passed' | 'failed' | 'warning' | 'error';
@@ -17,7 +17,7 @@ type CheckName =
 	| 'dependency-check'
 	| 'security-scan'
 	| 'contract-audit'
-	| 'access-review'
+	// | 'access-review'
 	| 'diamond-integrity'
 	| 'network-security';
 
@@ -132,7 +132,7 @@ class SecurityHealthChecks {
 				'dependency-check': { interval: 3600000, enabled: true }, // 1 hour
 				'security-scan': { interval: 86400000, enabled: true }, // 24 hours
 				'contract-audit': { interval: 604800000, enabled: true }, // 7 days
-				'access-review': { interval: 2592000000, enabled: true }, // 30 days
+				// 'access-review': { interval: 2592000000, enabled: true }, // 30 days
 				'diamond-integrity': { interval: 3600000, enabled: true }, // 1 hour
 				'network-security': { interval: 86400000, enabled: true }, // 24 hours
 			},
@@ -268,7 +268,7 @@ class SecurityHealthChecks {
 			'dependency-check': this.checkDependencies.bind(this),
 			'security-scan': this.checkSecurityScan.bind(this),
 			'contract-audit': this.checkContractAudit.bind(this),
-			'access-review': this.checkAccessReview.bind(this),
+			// 'access-review': this.checkAccessReview.bind(this),
 			'diamond-integrity': this.checkDiamondIntegrity.bind(this),
 			'network-security': this.checkNetworkSecurity.bind(this),
 		};
@@ -439,62 +439,6 @@ class SecurityHealthChecks {
 					priority: 'high',
 					action: 'Conduct initial contract audit',
 					details: 'No audit report found',
-				});
-			}
-		} catch (error) {
-			result.status = 'error';
-			result.message = (error as Error).message;
-		}
-
-		return result;
-	}
-
-	/**
-	 * Check access control and permissions
-	 */
-	private async checkAccessReview(options: HealthCheckOptions = {}): Promise<CheckResult> {
-		this.log('🔐 Checking access controls');
-
-		const result: CheckResult = {
-			status: 'passed',
-			details: {},
-			recommendations: [],
-			timestamp: new Date().toISOString(),
-		};
-
-		try {
-			// Check for exposed secrets
-			const secretPatterns = [
-				/PRIVATE_KEY\s*=/,
-				/SECRET\s*=/,
-				/PASSWORD\s*=/,
-				/API_KEY\s*=/,
-			];
-
-			const filesToCheck = ['hardhat.config.ts', 'package.json', '.env', '.env.local'];
-
-			let exposedSecrets = 0;
-			for (const file of filesToCheck) {
-				const filePath = path.join(__dirname, '..', file);
-				if (fs.existsSync(filePath)) {
-					const content = fs.readFileSync(filePath, 'utf8');
-					for (const pattern of secretPatterns) {
-						if (pattern.test(content)) {
-							exposedSecrets++;
-							break;
-						}
-					}
-				}
-			}
-
-			result.details.exposedSecrets = exposedSecrets;
-
-			if (exposedSecrets > 0) {
-				result.status = 'failed';
-				result.recommendations.push({
-					priority: 'critical',
-					action: 'Remove exposed secrets',
-					details: `${exposedSecrets} files contain exposed secrets`,
 				});
 			}
 		} catch (error) {

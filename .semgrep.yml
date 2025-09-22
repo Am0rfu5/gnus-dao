@@ -16,14 +16,6 @@ rules:
     severity: WARNING
     languages: [solidity]
 
-  - id: diamond-storage-violation
-    patterns:
-      - pattern-regex: \bcontract\s+\w+\s*\{[\s\S]*?\w+\s+\w+\s*;
-      - pattern-not: LibDiamond
-    message: "Contract uses direct storage variables that may conflict with Diamond storage pattern. Use LibDiamond.diamondStorage() for upgrade-safe storage."
-    severity: ERROR
-    languages: [solidity]
-
   - id: insecure-private-key
     patterns:
       - pattern-regex: (0x)?[0-9a-fA-F]{64}
@@ -114,6 +106,14 @@ rules:
     message: "Direct storage manipulation detected. Use diamond storage patterns to avoid storage collisions."
     severity: ERROR
     languages: [solidity]
+    
+  - id: diamond-storage-violation-2
+    patterns:
+      - pattern-regex: \bcontract\s+\w+\s*\{[\s\S]*?\w+\s+\w+\s*;
+      - pattern-not: LibDiamond
+    message: "Contract uses direct storage variables that may conflict with Diamond storage pattern. Use LibDiamond.diamondStorage() for upgrade-safe storage."
+    severity: ERROR
+    languages: [solidity]  
 
   - id: unsafe-diamond-cut
     patterns:

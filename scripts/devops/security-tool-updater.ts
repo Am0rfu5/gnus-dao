@@ -7,15 +7,15 @@
 
 import { execSync } from 'child_process';
 import * as fs from 'fs';
-import * as path from 'path';
 import * as https from 'https';
+import * as path from 'path';
 
 interface ToolConfig {
 	current: string;
 	latest: string | null;
 	updateCommand: string;
 	checkCommand: string;
-	type: 'pip' | 'npm' | 'go';
+	type: 'pip' | 'npm' | 'go' | 'binary';
 }
 
 interface UpdateLogEntry {
@@ -74,9 +74,9 @@ class SecurityToolUpdater {
 			'osv-scanner': {
 				current: '1.6.0',
 				latest: null,
-				updateCommand: 'go install github.com/google/osv-scanner/cmd/osv-scanner@latest',
+				updateCommand: 'echo "OSV scanner will be updated via binary download"',
 				checkCommand: 'osv-scanner --version',
-				type: 'go',
+				type: 'binary',
 			},
 		};
 
@@ -143,6 +143,8 @@ class SecurityToolUpdater {
 				return await this.getNpmLatestVersion(toolName);
 			case 'go':
 				return await this.getGoLatestVersion(toolName);
+			case 'binary':
+				return await this.getBinaryLatestVersion(toolName);
 			default:
 				return null;
 		}
@@ -220,6 +222,44 @@ class SecurityToolUpdater {
 		});
 	}
 
+	private async getBinaryLatestVersion(toolName: string): Promise<string | null> {
+		// For binary tools, check GitHub releases
+		return new Promise((resolve, reject) => {
+			let repo: string;
+			switch (toolName) {
+				case 'osv-scanner':
+					repo = 'google/osv-scanner';
+					break;
+				default:
+					resolve(null);
+					return;
+			}
+
+			const url = `https://api.github.com/repos/${repo}/releases/latest`;
+			https
+				.get(
+					url,
+					{
+						headers: { 'User-Agent': 'GNUS-DAO-Security-Updater' },
+					},
+					(res) => {
+						let data = '';
+						res.on('data', (chunk: Buffer) => (data += chunk.toString()));
+						res.on('end', () => {
+							try {
+								const release = JSON.parse(data);
+								const version = release.tag_name.replace('v', '');
+								resolve(version);
+							} catch (e) {
+								reject(e);
+							}
+						});
+					},
+				)
+				.on('error', reject);
+		});
+	}
+
 	private parseVersion(output: string, type: string): string {
 		switch (type) {
 			case 'pip':
@@ -230,6 +270,9 @@ class SecurityToolUpdater {
 			case 'go':
 				const goMatch = output.match(/v?(\d+\.\d+\.\d+)/);
 				return goMatch ? goMatch[1] : 'unknown';
+			case 'binary':
+				const binaryMatch = output.match(/osv-scanner version:\s*(\d+\.\d+\.\d+)/);
+				return binaryMatch ? binaryMatch[1] : 'unknown';
 			default:
 				return 'unknown';
 		}
@@ -252,6 +295,97 @@ class SecurityToolUpdater {
 		return false;
 	}
 
+	private async updateOsvScannerBinary(latestVersion: string | null): Promise<void> {
+		if (!latestVersion) {
+			throw new Error('No latest version available for osv-scanner');
+		}
+
+		try {
+			// Get the latest release info from GitHub API
+			const response = await this.makeHttpsRequest(
+				'https://api.github.com/repos/google/osv-scanner/releases/latest',
+			);
+			const releaseData = JSON.parse(response as string);
+			const tagName = releaseData.tag_name;
+			const version = tagName.startsWith('v') ? tagName.substring(1) : tagName;
+
+			// Construct download URL for Linux x64 binary
+			const downloadUrl = `https://github.com/google/osv-scanner/releases/download/${tagName}/osv-scanner_linux_amd64`;
+
+			console.log(`Downloading osv-scanner ${version} from ${downloadUrl}`);
+
+			// Download the binary
+			const binaryData = await this.makeHttpsRequest(downloadUrl, true);
+
+			// Write to temporary file
+			const tempPath = '/tmp/osv-scanner';
+			fs.writeFileSync(tempPath, binaryData);
+
+			// Make executable
+			fs.chmodSync(tempPath, '755');
+
+			// Move to final location
+			const finalPath = '/go/bin/osv-scanner';
+			execSync(`mv ${tempPath} ${finalPath}`, { stdio: 'inherit' });
+
+			console.log(`✅ osv-scanner updated to version ${version}`);
+		} catch (error) {
+			throw new Error(`Failed to update osv-scanner binary: ${(error as Error).message}`);
+		}
+	}
+
+	private async makeHttpsRequest(
+		url: string,
+		isBinary: boolean = false,
+	): Promise<string | Buffer> {
+		return new Promise((resolve, reject) => {
+			const makeRequest = (requestUrl: string) => {
+				const request = https.get(
+					requestUrl,
+					{
+						headers: {
+							'User-Agent': 'GNUS-DAO-Security-Tool-Updater',
+						},
+					},
+					(response) => {
+						if (response.statusCode === 302 || response.statusCode === 301) {
+							// Handle redirect
+							const redirectUrl = response.headers.location;
+							if (redirectUrl) {
+								console.log(`Following redirect to: ${redirectUrl}`);
+								makeRequest(redirectUrl);
+								return;
+							} else {
+								reject(new Error('Redirect without location header'));
+								return;
+							}
+						}
+
+						if (response.statusCode !== 200) {
+							reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
+							return;
+						}
+
+						const chunks: Buffer[] = [];
+						response.on('data', (chunk) => chunks.push(chunk));
+						response.on('end', () => {
+							const data = Buffer.concat(chunks);
+							resolve(isBinary ? data : data.toString('utf-8'));
+						});
+					},
+				);
+
+				request.on('error', reject);
+				request.setTimeout(30000, () => {
+					request.destroy();
+					reject(new Error('Request timeout'));
+				});
+			};
+
+			makeRequest(url);
+		});
+	}
+
 	async performUpdates(): Promise<void> {
 		console.log('\n🔄 Performing security tool updates...');
 
@@ -263,10 +397,16 @@ class SecurityToolUpdater {
 				totalCount++;
 				try {
 					console.log(`Updating ${update.tool}...`);
-					execSync(this.tools[update.tool].updateCommand, {
-						stdio: 'inherit',
-						timeout: 300000, // 5 minutes timeout
-					});
+
+					// Handle binary downloads specially
+					if (this.tools[update.tool].type === 'binary') {
+						await this.updateOsvScannerBinary(update.latest);
+					} else {
+						execSync(this.tools[update.tool].updateCommand, {
+							stdio: 'inherit',
+							timeout: 300000, // 5 minutes timeout
+						});
+					}
 
 					// Verify update
 					const newVersion = this.getCurrentVersion(this.tools[update.tool]);

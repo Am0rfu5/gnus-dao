@@ -13,7 +13,3 @@
 # SHA256 hashes used in artifact signatures and provenance
 # Allow SHA256 hashes (64 character hex strings) in signed artifacts
 ^[a-f0-9]{64}$
-
-# Common test patterns (allow any address starting with these patterns)
-# Note: These are only allowed in test files, not production code
-# ^0x[0-9a-fA-F]{39}$

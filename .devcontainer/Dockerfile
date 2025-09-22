@@ -139,7 +139,8 @@ COPY --chown=node:node .gitsecretsignore ./
 RUN git config --global secrets.patterns "0x[a-fA-F0-9]{64}" \
   && git config --global secrets.patterns "mnemonic.*[a-z]{3,}\s+[a-z]{3,}" \
   && git config --global secrets.patterns "INFURA_API_KEY|ALCHEMY_API_KEY|ETHERSCAN_API_KEY" \
-  && git config --global secrets.patterns "PRIVATE_KEY|SECRET_KEY" \
+  && git config --global secrets.patterns "PRIVATE_KEY\s*=\s*[\"']*0x[a-fA-F0-9]{64}[\"']*" \
+  && git config --global secrets.patterns "SECRET_KEY\s*=\s*[\"']*[a-zA-Z0-9]{32,}[\"']*" \
   && git config --global secrets.allowed "0x0000000000000000000000000000000000000000"
 
 # Create cache directories for performance

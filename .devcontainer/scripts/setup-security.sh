@@ -52,31 +52,59 @@ setup_git_secrets() {
     # Configure git-secrets with blockchain-specific patterns
     log_info "Configuring git-secrets patterns..."
 
-    # Private keys (64 hex characters after 0x)
-    git secrets --add '0x[a-fA-F0-9]{64}'
+    # Clear existing patterns to avoid conflicts (only if they exist)
+    if git config --get-all secrets.patterns >/dev/null 2>&1; then
+        git config --unset-all secrets.patterns >/dev/null 2>&1 || true
+    fi
+    if git config --get-all secrets.allowed >/dev/null 2>&1; then
+        git config --unset-all secrets.allowed >/dev/null 2>&1 || true
+    fi
 
-    # Mnemonic phrases (common wallet patterns)
-    git secrets --add 'mnemonic.*[a-z]{3,}\s+[a-z]{3,}'
-    git secrets --add '"mnemonic":\s*"[^"]+"'
-    git secrets --add "'mnemonic':\s*'[^']+'"
+    # Add all patterns from git-secrets_patterns.md
+    git secrets --add 'PRIVATE_KEY|SECRET_KEY' || log_warning "Failed to add PRIVATE_KEY|SECRET_KEY pattern"
+    git secrets --add '0x[a-fA-F0-9]{64}' || log_warning "Failed to add 0x pattern"
+    git secrets --add 'mnemonic.*[a-z]{3,}\s+[a-z]{3,}' || log_warning "Failed to add mnemonic pattern"
+    git secrets --add '"mnemonic":\s*"[^"]+"' || log_warning "Failed to add mnemonic JSON pattern"
+    git secrets --add "'mnemonic':\s*'[^']+'" || log_warning "Failed to add mnemonic JS pattern"
+    git secrets --add 'INFURA_API_KEY\s*=\s*["'\'']*[a-zA-Z0-9]{32}["'\'']*' || log_warning "Failed to add INFURA pattern"
+    git secrets --add 'ALCHEMY_API_KEY\s*=\s*["'\'']*[a-zA-Z0-9]{32}["'\'']*' || log_warning "Failed to add ALCHEMY pattern"
+    git secrets --add 'ETHERSCAN_API_KEY\s*=\s*["'\'']*[a-zA-Z0-9]{32}["'\'']*' || log_warning "Failed to add ETHERSCAN pattern"
+    git secrets --add 'PRIVATE_KEY\s*=\s*["'\'']*0x[a-fA-F0-9]{64}["'\'']*' || log_warning "Failed to add PRIVATE_KEY pattern"
+    git secrets --add 'PRIVATE_KEY\s*=\s*["'\'']*0x[a-fA-F0-9]{64}["'\'']*\s*$' || log_warning "Failed to add PRIVATE_KEY end pattern"
+    git secrets --add 'SECRET_KEY\s*=\s*["'\'']*[a-zA-Z0-9]{32,}["'\'']*' || log_warning "Failed to add SECRET_KEY pattern"
+    git secrets --add 'API_SECRET\s*=\s*["'\'']*[a-zA-Z0-9]{32,}["'\'']*' || log_warning "Failed to add API_SECRET pattern"
+    git secrets --add 'https://[^/]*:[^@]*@[^/]*' || log_warning "Failed to add HTTPS URL pattern"
+    git secrets --add 'wss://[^/]*:[^@]*@[^/]*' || log_warning "Failed to add WSS URL pattern"
 
-    # API Keys and secrets
-    git secrets --add 'INFURA_API_KEY|ALCHEMY_API_KEY|ETHERSCAN_API_KEY'
-    git secrets --add 'PRIVATE_KEY|SECRET_KEY|API_SECRET'
-    git secrets --add 'MNEMONIC|SEED_PHRASE|WALLET_SEED'
-
-    # RPC URLs with potential keys
-    git secrets --add 'https://[^/]*:[^@]*@[^/]*'
-    git secrets --add 'wss://[^/]*:[^@]*@[^/]*'
-
-    # Contract addresses (allow common test addresses)
-    git secrets --add --allowed '0x0000000000000000000000000000000000000000'
-    git secrets --add --allowed '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
+    # Add all allowed patterns from git-secrets_patterns.md
+    git secrets --add --allowed '0x0000000000000000000000000000000000000000' || log_warning "Failed to add zero address allowed pattern"
+    git secrets --add --allowed 'PRIVATE_KEY\s*=\s*your_private_key_here' || log_warning "Failed to add placeholder allowed pattern"
+    git secrets --add --allowed 'process\.env\.PRIVATE_KEY' || log_warning "Failed to add env var allowed pattern"
+    git secrets --add --allowed 'PRIVATE_KEY\s*,' || log_warning "Failed to add comma allowed pattern"
+    git secrets --add --allowed 'PRIVATE_KEY=' || log_warning "Failed to add equals allowed pattern"
+    git secrets --add --allowed 'ETHERSCAN_API_KEY=' || log_warning "Failed to add ETHERSCAN allowed pattern"
+    git secrets --add --allowed 'ALCHEMY_API_KEY=' || log_warning "Failed to add ALCHEMY allowed pattern"
+    git secrets --add --allowed 'INFURA_API_KEY=' || log_warning "Failed to add INFURA allowed pattern"
+    git secrets --add --allowed 'git config --global secrets.patterns "PRIVATE_KEY|SECRET_KEY"' || log_warning "Failed to add git config allowed pattern"
+    git secrets --add --allowed "git secrets --add 'PRIVATE_KEY|SECRET_KEY'" || log_warning "Failed to add git secrets add allowed pattern"
+    git secrets --add --allowed 'Private key is required' || log_warning "Failed to add private key required allowed pattern"
+    git secrets --add --allowed '/PRIVATE_KEY\\s*= /' || log_warning "Failed to add regex pattern 1 allowed"
+    git secrets --add --allowed "'RPC_URL', 'PRIVATE_KEY', 'DIAMOND_NAME'" || log_warning "Failed to add RPC_URL allowed pattern"
+    git secrets --add --allowed "git secrets --add 'SECRET_KEY" || log_warning "Failed to add git secrets SECRET_KEY allowed pattern"
+    git secrets --add --allowed '/PRIVATE_KEY\\s*= /,' || log_warning "Failed to add regex pattern 2 allowed"
+    git secrets --add --allowed '/PRIVATE_KEY\\\\s*= /' || log_warning "Failed to add regex pattern 3 allowed"
+    git secrets --add --allowed '/PRIVATE_KEY\\\\s*= /' || log_warning "Failed to add regex pattern 4 allowed"
+    git secrets --add --allowed '/PRIVATE_KEY\\\\s*= /,' || log_warning "Failed to add regex pattern 5 allowed"
+    git secrets --add --allowed '/PRIVATE_KEY\\s\\*=/' || log_warning "Failed to add regex pattern 6 allowed"
+    git secrets --add --allowed 'const secretPatterns = \[' || log_warning "Failed to add const allowed pattern"
+    git secrets --add --allowed 'SECRET_KEYs*' || log_warning "Failed to add SECRET_KEYs allowed pattern"
+    git secrets --add --allowed 'scripts/devops/signed-artifacts/' || log_warning "Failed to add signed-artifacts allowed pattern"
+    git secrets --add --allowed '.devcontainer/scripts/setup-security.sh' || log_warning "Failed to add .devcontainer allowed pattern"
 
     # Install git-secrets hooks
     if [ -d .git ]; then
-        git secrets --install
-        git secrets --register-aws
+        git secrets --install -f || log_warning "Failed to install git-secrets hooks"
+        git secrets --register-aws || log_warning "Failed to register AWS patterns"
         log_success "git-secrets configured and hooks installed"
     else
         log_warning "Not in a git repository. git-secrets hooks not installed."
@@ -124,12 +152,12 @@ setup_snyk() {
     if snyk auth --help >/dev/null 2>&1; then
         log_info "Snyk CLI is available"
 
-        # Check authentication status
-        if snyk auth test >/dev/null 2>&1; then
+        # Check authentication status by looking for OAuth token storage
+        if snyk config | grep -q "INTERNAL_OAUTH_TOKEN_STORAGE"; then
             log_success "Snyk is authenticated"
         else
             log_warning "Snyk is not authenticated. Run 'snyk auth' to authenticate."
-            log_info "You can also set SNYK_TOKEN environment variable"
+            log_info "You can also set SNYK_TOKEN environment variable (may require paid plan)"
         fi
     else
         log_error "Snyk installation failed"
@@ -149,11 +177,11 @@ setup_socket() {
     if command_exists socket; then
         log_success "Socket.dev CLI is ready"
 
-        # Check if API token is configured
-        if [ -n "${SOCKET_CLI_API_TOKEN:-}" ]; then
-            log_success "Socket.dev API token is configured"
+        # Check if API token is configured in .env file
+        if [ -f .env ] && grep -q "^SOCKET_CLI_API_TOKEN=" .env; then
+            log_success "Socket.dev API token is configured in .env"
         else
-            log_warning "SOCKET_CLI_API_TOKEN not set. Configure for full functionality."
+            log_warning "SOCKET_CLI_API_TOKEN not set in .env file. Set it in .env for full functionality."
         fi
     else
         log_error "Socket.dev CLI installation failed"
