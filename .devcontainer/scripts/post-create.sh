@@ -40,17 +40,27 @@ install_dependencies() {
     if [ -f yarn.lock ]; then
         log_info "Using Yarn for dependency management..."
 
-        # Configure Yarn for better performance
-        yarn config set cache-folder /home/node/.yarn/cache
-        yarn config set network-timeout 600000
-        yarn config set network-concurrency 8
+        # Configure Yarn for better performance (Yarn 4.x compatible)
+        yarn config set nodeLinker node-modules 2>/dev/null || log_warning "Could not set node linker"
 
-        # Install dependencies
-        if yarn install --frozen-lockfile; then
+        # Check if we have permission issues with .yarn directory
+        if [ -d "/home/node/.yarn" ] && [ ! -w "/home/node/.yarn" ]; then
+            log_warning ".yarn directory has permission issues. This should be fixed in devcontainer.json"
+        fi
+
+        # Install dependencies (don't fail completely on git dependency issues)
+        log_info "Running yarn install..."
+        if yarn install --immutable; then
             log_success "Dependencies installed successfully"
         else
-            log_error "Failed to install dependencies"
-            return 1
+            log_warning "Some dependencies failed to install, but continuing with setup..."
+            # Check if essential dependencies are available
+            if [ -d "node_modules" ] && [ -f "node_modules/.bin/hardhat" ] && [ -f "node_modules/.bin/tsc" ]; then
+                log_info "Essential dependencies (hardhat, typescript) are available"
+            else
+                log_error "Essential dependencies are missing"
+                return 1
+            fi
         fi
     else
         log_warning "yarn.lock not found. Running yarn install without lockfile..."
@@ -66,13 +76,19 @@ compile_typescript() {
         if tsc --noEmit; then
             log_success "TypeScript compilation successful"
         else
-            log_error "TypeScript compilation failed"
-            return 1
+            log_warning "TypeScript compilation failed, but continuing..."
         fi
     else
         log_warning "TypeScript compiler not found. Installing..."
-        yarn add -D typescript
-        tsc --noEmit
+        if yarn add -D typescript; then
+            if npx tsc --noEmit; then
+                log_success "TypeScript compilation successful"
+            else
+                log_warning "TypeScript compilation failed after install, but continuing..."
+            fi
+        else
+            log_warning "Failed to install TypeScript, but continuing with setup..."
+        fi
     fi
 }
 

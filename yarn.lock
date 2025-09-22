@@ -6326,7 +6326,7 @@ __metadata:
     solidity-coverage: "npm:^0.8.0"
     ts-node: "npm:^10.9.2"
     typechain: "npm:^8.3.0"
-    typescript: "npm:>=4.5.0"
+    typescript: "npm:^5.9.2"
     uint32: "npm:^0.2.1"
     web3: "npm:^4.16.0"
     winston: "npm:^3.17.0"
@@ -10197,7 +10197,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:>=4.5.0":
+"typescript@npm:^5.9.2":
   version: 5.9.2
   resolution: "typescript@npm:5.9.2"
   bin:
@@ -10207,7 +10207,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@npm%3A>=4.5.0#optional!builtin<compat/typescript>":
+"typescript@patch:typescript@npm%3A^5.9.2#optional!builtin<compat/typescript>":
   version: 5.9.2
   resolution: "typescript@patch:typescript@npm%3A5.9.2#optional!builtin<compat/typescript>::version=5.9.2&hash=5786d5"
   bin:

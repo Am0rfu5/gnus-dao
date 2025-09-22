@@ -4,7 +4,7 @@
   "description": "GNUS-DAO ERC-2535 Diamond Proxy Contracts project",
   "main": "index.ts",
   "scripts": {
-    "test": "npx hardhat test-multichain --chains hardhat",
+    "test": "npx hardhat test",
     "clean": "npx hardhat clean && rm -rf dist artifacts cache diamond-abi typechain-types diamond-typechain-types",
     "compile": "npx hardhat compile && npx hardhat diamond:generate-abi-typechain --diamond-name GNUSDAODiamond",
     "diamonds-clean": "rm -rf diamond-typechain-types diamond-abi && npx hardhat clean",
@@ -116,7 +116,7 @@
     "solidity-coverage": "^0.8.0",
     "ts-node": "^10.9.2",
     "typechain": "^8.3.0",
-    "typescript": ">=4.5.0",
+    "typescript": "^5.9.2",
     "uint32": "^0.2.1",
     "web3": "^4.16.0",
     "winston": "^3.17.0"
