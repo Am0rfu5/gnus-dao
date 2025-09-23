@@ -40,14 +40,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
+          
+      - name: Enable Corepack
+        run: corepack enable
+        
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Enable Corepack
-        run: corepack enable
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
