@@ -60,6 +60,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
   # Network tools
   netcat-openbsd \
   dnsutils \
+  openssh-client \
   # Process monitoring
   htop \
   procps \

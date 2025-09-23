@@ -246,6 +246,10 @@ verify_environment() {
     if command_exists git && git --version >/dev/null 2>&1; then
         ((checks_passed++))
         log_success "Git available"
+        
+        # Configure git pager to use 'more' for better readability
+        git config --global core.pager more
+        log_info "Git pager configured to use 'more'"
     else
         log_error "Git check failed"
     fi
