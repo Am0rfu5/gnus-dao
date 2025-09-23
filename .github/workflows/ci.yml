@@ -25,7 +25,6 @@ concurrency:
 
 env:
   NODE_VERSION: '22.19.0'
-  YARN_VERSION: '4.9.4'
   HARDHAT_CACHE_DIR: ~/.hardhat/cache
   YARN_CACHE_DIR: ~/.yarn/cache
 
@@ -49,10 +48,8 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: yarn.lock
 
-      - name: Setup Yarn
-        run: |
-          npm install -g yarn@${{ env.YARN_VERSION }}
-          yarn set version ${{ env.YARN_VERSION }}
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
@@ -93,10 +90,8 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: yarn.lock
 
-      - name: Setup Yarn
-        run: |
-          npm install -g yarn@${{ env.YARN_VERSION }}
-          yarn set version ${{ env.YARN_VERSION }}
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
@@ -169,10 +164,8 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: yarn.lock
 
-      - name: Setup Yarn
-        run: |
-          npm install -g yarn@${{ env.YARN_VERSION }}
-          yarn set version ${{ env.YARN_VERSION }}
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
@@ -248,10 +241,8 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: yarn.lock
 
-      - name: Setup Yarn
-        run: |
-          npm install -g yarn@${{ env.YARN_VERSION }}
-          yarn set version ${{ env.YARN_VERSION }}
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
@@ -306,10 +297,8 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: yarn.lock
 
-      - name: Setup Yarn
-        run: |
-          npm install -g yarn@${{ env.YARN_VERSION }}
-          yarn set version ${{ env.YARN_VERSION }}
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
@@ -376,10 +365,8 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: yarn.lock
 
-      - name: Setup Yarn
-        run: |
-          npm install -g yarn@${{ env.YARN_VERSION }}
-          yarn set version ${{ env.YARN_VERSION }}
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
@@ -430,10 +417,8 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: yarn.lock
 
-      - name: Setup Yarn
-        run: |
-          npm install -g yarn@${{ env.YARN_VERSION }}
-          yarn set version ${{ env.YARN_VERSION }}
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
@@ -482,10 +467,8 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: yarn.lock
 
-      - name: Setup Yarn
-        run: |
-          npm install -g yarn@${{ env.YARN_VERSION }}
-          yarn set version ${{ env.YARN_VERSION }}
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
