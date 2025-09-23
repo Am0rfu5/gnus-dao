@@ -52,7 +52,7 @@ jobs:
           cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
-        run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
+        run: yarn config set cacheFolder ${{ env.YARN_CACHE_DIR }}
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
@@ -94,7 +94,7 @@ jobs:
           cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
-        run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
+        run: yarn config set cacheFolder ${{ env.YARN_CACHE_DIR }}
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
@@ -169,7 +169,7 @@ jobs:
           cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
-        run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
+        run: yarn config set cacheFolder ${{ env.YARN_CACHE_DIR }}
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
@@ -246,7 +246,7 @@ jobs:
           cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
-        run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
+        run: yarn config set cacheFolder ${{ env.YARN_CACHE_DIR }}
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
@@ -302,7 +302,7 @@ jobs:
           cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
-        run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
+        run: yarn config set cacheFolder ${{ env.YARN_CACHE_DIR }}
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
@@ -370,7 +370,7 @@ jobs:
           cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
-        run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
+        run: yarn config set cacheFolder ${{ env.YARN_CACHE_DIR }}
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
@@ -422,7 +422,7 @@ jobs:
           cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
-        run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
+        run: yarn config set cacheFolder ${{ env.YARN_CACHE_DIR }}
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
@@ -472,7 +472,7 @@ jobs:
           cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
-        run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
+        run: yarn config set cacheFolder ${{ env.YARN_CACHE_DIR }}
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline

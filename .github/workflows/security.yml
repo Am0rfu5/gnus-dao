@@ -68,7 +68,7 @@ jobs:
           cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
-        run: yarn config set cache-folder ~/.yarn/cache
+        run: yarn config set cacheFolder ~/.yarn/cache
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
@@ -244,7 +244,7 @@ jobs:
           cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
-        run: yarn config set cache-folder ~/.yarn/cache
+        run: yarn config set cacheFolder ~/.yarn/cache
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
@@ -438,7 +438,7 @@ jobs:
           python-version: '3.9'
 
       - name: Configure Yarn cache
-        run: yarn config set cache-folder ~/.yarn/cache
+        run: yarn config set cacheFolder ~/.yarn/cache
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
