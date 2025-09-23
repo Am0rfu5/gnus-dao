@@ -16,8 +16,8 @@ This comprehensive checklist ensures new developers are properly set up with GNU
 
 ### Development Environment
 
-- [ ] **Node.js 18+**: Installed and verified (`node --version`)
-- [ ] **Yarn 1.22+**: Package manager installed (`yarn --version`)
+- [ ] **Node.js 22+**: Installed and verified (`node --version`)
+- [ ] **Yarn 4.9+**: Package manager installed (`yarn --version`)
 - [ ] **Git**: Version control system configured
 - [ ] **IDE**: VS Code or preferred IDE installed
 - [ ] **Terminal**: Unix-like terminal (bash/zsh) configured

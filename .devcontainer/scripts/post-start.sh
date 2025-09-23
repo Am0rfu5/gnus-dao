@@ -43,7 +43,7 @@ check_environment_health() {
     # Check Node.js version
     if command -v node >/dev/null 2>&1; then
         local node_version=$(node --version | sed 's/v//')
-        if [[ "$(printf '%s\n' "$node_version" "18.0.0" | sort -V | head -n1)" != "18.0.0" ]]; then
+        if [[ "$(printf '%s\n' "$node_version" "22.0.0" | sort -V | head -n1)" != "22.0.0" ]]; then
             log_warning "Node.js version $node_version may be outdated"
         fi
     else

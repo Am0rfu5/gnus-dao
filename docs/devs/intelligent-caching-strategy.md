@@ -235,8 +235,8 @@ This document outlines the intelligent caching strategies implemented to reduce 
 ```yaml
 # .tool-versions file for consistent tool versions
 # This file is used for cache key generation
-nodejs 18.19.0
-yarn 1.22.19
+nodejs 22.19.0
+yarn 4.9.4
 slither 0.10.0
 semgrep 1.57.0
 snyk 1.1248.0

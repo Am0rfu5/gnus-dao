@@ -155,7 +155,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18.19.0]
+        node-version: [22.19.0]
         test-group: [unit, integration]
 
     steps:

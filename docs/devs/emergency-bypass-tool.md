@@ -147,7 +147,7 @@ Each log entry contains:
   "timestamp": "2025-01-15T10:30:45.123Z",
   "action": "commit",
   "user": "johndoe",
-  "nodeVersion": "v18.17.0",
+  "nodeVersion": "v22.19.0",
   "cwd": "/path/to/project",
   "reason": "Critical database connection failure",
   "contact": "admin@gnus.ai",

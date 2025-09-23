@@ -252,8 +252,8 @@ Use the [Developer Onboarding Checklist](./developer-onboarding-checklist.md) to
 **Solution:** Check your Node.js version and ensure all dependencies are installed
 
 ```bash
-node --version  # Should be 18+
-yarn --version  # Should be 1.22+
+node --version  # Should be 22+
+yarn --version  # Should be 4.9+
 rm -rf node_modules && yarn install --frozen-lockfile
 ```
 

@@ -32,7 +32,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '18.19.0'
+  NODE_VERSION: '22.19.0'
   SCAN_TYPE: ${{ github.event.inputs.scan_type || 'full' }}
   FAIL_ON_WARNINGS: ${{ github.event.inputs.fail_on_warnings == 'true' && 'true' || 'false' }}
   SOCKET_CLI_API_TOKEN: ${{ secrets.SOCKET_CLI_API_TOKEN }}
@@ -66,7 +66,7 @@ jobs:
 
       - name: Setup Yarn
         run: |
-          npm install -g yarn@${YARN_VERSION:-1.22.19}
+          npm install -g yarn@${YARN_VERSION:-4.9.4}
           yarn config set cache-folder ~/.yarn/cache
 
       - name: Install dependencies (frozen lockfile)
@@ -241,7 +241,7 @@ jobs:
 
       - name: Setup Yarn
         run: |
-          npm install -g yarn@${YARN_VERSION:-1.22.19}
+          npm install -g yarn@${YARN_VERSION:-4.9.4}
           yarn config set cache-folder ~/.yarn/cache
 
       - name: Install dependencies (frozen lockfile)
@@ -433,7 +433,7 @@ jobs:
 
       - name: Setup Yarn
         run: |
-          npm install -g yarn@${YARN_VERSION:-1.22.19}
+          npm install -g yarn@${YARN_VERSION:-4.9.4}
           yarn config set cache-folder ~/.yarn/cache
 
       - name: Install dependencies (frozen lockfile)
