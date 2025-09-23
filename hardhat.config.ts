@@ -1,15 +1,14 @@
 import * as dotenv from 'dotenv';
 
-import { HardhatUserConfig, task } from 'hardhat/config';
 import '@nomicfoundation/hardhat-toolbox';
-// import 'hardhat-diamond-abi'; // Disabled - using custom diamond ABI generator
-import 'hardhat-abi-exporter';
-import '@typechain/hardhat';
-import 'hardhat-gas-reporter';
-import 'solidity-coverage';
 import '@nomicfoundation/hardhat-web3-v4';
-import 'hardhat-multichain';
+import '@typechain/hardhat';
+import 'hardhat-abi-exporter';
 import 'hardhat-diamonds';
+import 'hardhat-gas-reporter';
+import 'hardhat-multichain';
+import { HardhatUserConfig, task } from 'hardhat/config';
+import 'solidity-coverage';
 
 dotenv.config();
 
