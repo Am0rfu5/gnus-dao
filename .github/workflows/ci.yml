@@ -51,9 +51,6 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: yarn.lock
 
-      - name: Configure Yarn cache
-        run: yarn config set cacheFolder ${{ env.YARN_CACHE_DIR }}
-
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
 
@@ -92,9 +89,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
           cache-dependency-path: yarn.lock
-
-      - name: Configure Yarn cache
-        run: yarn config set cacheFolder ${{ env.YARN_CACHE_DIR }}
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
@@ -167,9 +161,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
           cache-dependency-path: yarn.lock
-
-      - name: Configure Yarn cache
-        run: yarn config set cacheFolder ${{ env.YARN_CACHE_DIR }}
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
@@ -245,9 +236,6 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: yarn.lock
 
-      - name: Configure Yarn cache
-        run: yarn config set cacheFolder ${{ env.YARN_CACHE_DIR }}
-
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
 
@@ -300,9 +288,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
           cache-dependency-path: yarn.lock
-
-      - name: Configure Yarn cache
-        run: yarn config set cacheFolder ${{ env.YARN_CACHE_DIR }}
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
@@ -369,9 +354,6 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: yarn.lock
 
-      - name: Configure Yarn cache
-        run: yarn config set cacheFolder ${{ env.YARN_CACHE_DIR }}
-
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
 
@@ -421,9 +403,6 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: yarn.lock
 
-      - name: Configure Yarn cache
-        run: yarn config set cacheFolder ${{ env.YARN_CACHE_DIR }}
-
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
 
@@ -470,9 +449,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
           cache-dependency-path: yarn.lock
-
-      - name: Configure Yarn cache
-        run: yarn config set cacheFolder ${{ env.YARN_CACHE_DIR }}
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
