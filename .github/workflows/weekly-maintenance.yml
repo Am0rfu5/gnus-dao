@@ -17,8 +17,7 @@ jobs:
       - name: Setup Environment
         uses: actions/setup-node@v5
         with:
-          node-version: '18'
-          cache: 'yarn'
+          node-version: '22'
 
       - name: Install Dependencies
         run: yarn install --frozen-lockfile
@@ -65,7 +64,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '18'
+          node-version: '22'
           cache: 'yarn'
 
       - name: Enable Corepack

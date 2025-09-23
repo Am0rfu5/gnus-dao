@@ -85,7 +85,7 @@ steps:
   - name: Setup Node.js
     uses: actions/setup-node@v4
     with:
-      node-version: '18'
+      node-version: '22'
       cache: 'yarn'  # Use caching to reduce setup time
 
   - name: Install Dependencies

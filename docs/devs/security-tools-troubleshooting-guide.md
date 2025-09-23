@@ -906,7 +906,7 @@ This guide provides solutions to common issues encountered when using GNUS-DAO's
    - name: Setup Node.js
      uses: actions/setup-node@v4
      with:
-       node-version: '18'
+       node-version: '22'
        cache: 'yarn'
    ```
 

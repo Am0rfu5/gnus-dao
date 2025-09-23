@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '18'
+          node-version: '22'
 
       - name: Clean Old Caches
         run: |
@@ -61,8 +61,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '18'
-          cache: 'yarn'
+          node-version: '22'
 
       - name: Enable Corepack
         run: corepack enable
