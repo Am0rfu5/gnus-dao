@@ -48,7 +48,8 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
-
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
@@ -82,13 +83,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Enable Corepack
+        run: corepack enable
+        
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Enable Corepack
-        run: corepack enable
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
@@ -154,13 +157,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: ${{ matrix.node-version }}
 
       - name: Enable Corepack
         run: corepack enable
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
@@ -229,13 +235,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Enable Corepack
+        run: corepack enable
+        
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Enable Corepack
-        run: corepack enable
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
@@ -283,13 +291,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Enable Corepack
+        run: corepack enable
+
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Enable Corepack
-        run: corepack enable
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
@@ -349,13 +359,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Enable Corepack
+        run: corepack enable
+        
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Enable Corepack
-        run: corepack enable
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
@@ -399,13 +411,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Enable Corepack
+        run: corepack enable
+        
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Enable Corepack
-        run: corepack enable
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}
@@ -447,13 +461,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Enable Corepack
+        run: corepack enable
+        
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Enable Corepack
-        run: corepack enable
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ${{ env.YARN_CACHE_DIR }}

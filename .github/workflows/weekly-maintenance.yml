@@ -61,14 +61,15 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Enable Corepack
+        run: corepack enable
+
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: 'yarn'
-
-      - name: Enable Corepack
-        run: corepack enable
+          cache-dependency-path: yarn.lock
 
       - name: Install Dependencies
         run: yarn install --frozen-lockfile

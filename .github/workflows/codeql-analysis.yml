@@ -34,13 +34,16 @@ jobs:
           config-file: ./.github/codeql-config.yml
           queries: security-and-quality
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: '22'
 
       - name: Enable Corepack
         run: corepack enable
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile

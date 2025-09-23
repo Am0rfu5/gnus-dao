@@ -57,13 +57,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Enable Corepack
+        run: corepack enable
+        
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Enable Corepack
-        run: corepack enable
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ~/.yarn/cache
@@ -231,13 +233,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Enable Corepack
+        run: corepack enable
+        
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Enable Corepack
-        run: corepack enable
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
 
       - name: Configure Yarn cache
         run: yarn config set cache-folder ~/.yarn/cache
@@ -421,6 +425,8 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -548,6 +554,8 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
 
       - name: OSSF Scorecard
         id: scorecard
