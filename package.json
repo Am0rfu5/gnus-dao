@@ -6,6 +6,7 @@
   "scripts": {
     "test": "npx hardhat test",
     "clean": "rm -rf artifacts/* cache/* diamond-abi/* typechain-types/* diamond-typechain-types/*",
+    "build": "yarn clean-compile && npx tsc",
     "compile": "npx hardhat compile && npx hardhat diamond:generate-abi-typechain --diamond-name GNUSDAODiamond",
     "diamonds-clean": "rm -rf diamond-typechain-types diamond-abi && npx hardhat clean",
     "coverage": "npx hardhat coverage",
