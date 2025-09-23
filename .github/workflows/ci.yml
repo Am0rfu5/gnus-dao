@@ -24,8 +24,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '18.19.0'
-  YARN_VERSION: '1.22.19'
+  NODE_VERSION: '22.19.0'
+  YARN_VERSION: '4.9.4'
   HARDHAT_CACHE_DIR: ~/.hardhat/cache
   YARN_CACHE_DIR: ~/.yarn/cache
 
