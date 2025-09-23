@@ -23,7 +23,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '18'
           cache: 'yarn'
@@ -72,7 +72,7 @@ jobs:
 
       - name: Create Performance Issue
         if: steps.metrics.outputs.alert_count > 0 && github.event_name == 'schedule'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');

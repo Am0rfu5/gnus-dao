@@ -126,8 +126,8 @@ validate_tool_versions() {
 
     # Node.js version check
     local node_version=$(get_tool_version "node" "node --version | sed 's/v//'")
-    if [[ "$node_version" != "20."* ]]; then
-        log_warning "Node.js version $node_version may not match CI (expected 20.x)"
+    if [[ "$node_version" != "22."* ]]; then
+        log_warning "Node.js version $node_version may not match CI (expected 22.x)"
         ((version_issues++))
     fi
 

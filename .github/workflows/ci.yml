@@ -43,7 +43,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
@@ -87,7 +87,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
@@ -163,7 +163,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'yarn'
@@ -181,7 +181,7 @@ jobs:
         run: yarn install --frozen-lockfile --prefer-offline
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: build-artifacts
 
@@ -242,7 +242,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
@@ -260,7 +260,7 @@ jobs:
         run: yarn install --frozen-lockfile --prefer-offline
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: build-artifacts
 
@@ -300,7 +300,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
@@ -318,7 +318,7 @@ jobs:
         run: yarn install --frozen-lockfile --prefer-offline
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: build-artifacts
 
@@ -370,7 +370,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
@@ -388,7 +388,7 @@ jobs:
         run: yarn install --frozen-lockfile --prefer-offline
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: build-artifacts
 
@@ -424,7 +424,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
@@ -476,7 +476,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
@@ -494,12 +494,12 @@ jobs:
         run: yarn install --frozen-lockfile --prefer-offline
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: build-artifacts
 
       - name: Download coverage report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: coverage-report
 
