@@ -9,7 +9,7 @@
     "compile": "npx hardhat compile && npx hardhat diamond:generate-abi-typechain --diamond-name GNUSDAODiamond",
     "diamonds-clean": "rm -rf diamond-typechain-types diamond-abi && npx hardhat clean",
     "coverage": "npx hardhat coverage",
-    "build": "npx hardhat compile && npx tsc && npx hardhat diamond:generate-abi-typechain --diamond-name GNUSDAODiamond",
+    "clean-compile": "yarn clean && ya compile",
     "diamond:generate-abi": "npx hardhat diamond:generate-abi --diamond-name GNUSDAODiamond",
     "diamond:generate-abi-typechain": "npx hardhat diamond:generate-abi-typechain --diamond-name GNUSDAODiamond",
     "lint": "eslint . --ext .ts,.js --fix",
