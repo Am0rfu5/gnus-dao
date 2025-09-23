@@ -32,7 +32,7 @@ jobs:
           fetch-depth: 0  # Fetch full history for better analysis
 
       - name: Run OSSF Scorecard
-        uses: ossf/scorecard-action@v8
+        uses: ossf/scorecard-action@v5
         with:
           results_file: results.sarif
           results_format: sarif
