@@ -554,7 +554,7 @@ jobs:
 
       - name: OSSF Scorecard
         id: scorecard
-        uses: ossf/scorecard-action@v5
+        uses: ossf/scorecard-action@v5.2.1
         with:
           results_file: results.sarif
           results_format: sarif
