@@ -64,10 +64,11 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: yarn.lock
 
-      - name: Setup Yarn
-        run: |
-          npm install -g yarn@${YARN_VERSION:-4.9.4}
-          yarn config set cache-folder ~/.yarn/cache
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Configure Yarn cache
+        run: yarn config set cache-folder ~/.yarn/cache
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
@@ -239,10 +240,11 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: yarn.lock
 
-      - name: Setup Yarn
-        run: |
-          npm install -g yarn@${YARN_VERSION:-4.9.4}
-          yarn config set cache-folder ~/.yarn/cache
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Configure Yarn cache
+        run: yarn config set cache-folder ~/.yarn/cache
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
@@ -431,10 +433,11 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Setup Yarn
-        run: |
-          npm install -g yarn@${YARN_VERSION:-4.9.4}
-          yarn config set cache-folder ~/.yarn/cache
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Configure Yarn cache
+        run: yarn config set cache-folder ~/.yarn/cache
 
       - name: Install dependencies (frozen lockfile)
         run: yarn install --frozen-lockfile --prefer-offline
