@@ -1,0 +1,250 @@
+name: Parallel DevContainer Testing
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/gnus-dao-devcontainer
+
+jobs:
+  generate-test-matrix:
+    name: Generate Test Matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      test-matrix: ${{ steps.matrix.outputs.test-matrix }}
+      shard-count: ${{ steps.matrix.outputs.shard-count }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.19.0'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Generate test matrix
+        id: matrix
+        run: |
+          MATRIX=$(node scripts/generate-test-shards.js --format=github-matrix)
+          echo "test-matrix=$MATRIX" >> $GITHUB_OUTPUT
+          
+          SHARD_COUNT=$(echo "$MATRIX" | jq '.include | length')
+          echo "shard-count=$SHARD_COUNT" >> $GITHUB_OUTPUT
+
+      - name: Upload matrix artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-matrix
+          path: |
+            test-analysis.json
+            test-shards-validation.json
+
+  parallel-unit-tests:
+    name: Unit Tests (Shard ${{ matrix.shard }}/${{ matrix.shard-total }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: generate-test-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.generate-test-matrix.outputs.test-matrix) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run unit tests in DevContainer
+        if: matrix.test-category == 'unit'
+        uses: devcontainers/ci@v0.3
+        with:
+          imageName: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          runCmd: |
+            echo "Running unit tests shard ${{ matrix.shard }}/${{ matrix.shard-total }}"
+            
+            # Install dependencies if needed
+            if [ ! -d "node_modules" ]; then
+              yarn install --frozen-lockfile --prefer-offline
+            fi
+            
+            # Run specific test files for this shard
+            if [ -n "${{ matrix.test-files }}" ]; then
+              yarn test --testPathPattern="${{ matrix.test-files }}" --coverage --testTimeout=30000 --outputFile=test-results-unit-${{ matrix.shard }}.json
+            else
+              yarn test:unit --shard ${{ matrix.shard }}/${{ matrix.shard-total }} --coverage --outputFile=test-results-unit-${{ matrix.shard }}.json
+            fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results-shard-${{ matrix.shard }}
+          path: |
+            test-results-unit-${{ matrix.shard }}.json
+            coverage/lcov.info
+          retention-days: 7
+
+  parallel-integration-tests:
+    name: Integration Tests (Shard ${{ matrix.shard }}/${{ matrix.shard-total }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: generate-test-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.generate-test-matrix.outputs.test-matrix) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run integration tests in DevContainer
+        if: matrix.test-category == 'integration'
+        uses: devcontainers/ci@v0.3
+        with:
+          imageName: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          runCmd: |
+            echo "Running integration tests shard ${{ matrix.shard }}/${{ matrix.shard-total }}"
+            
+            # Install dependencies if needed
+            if [ ! -d "node_modules" ]; then
+              yarn install --frozen-lockfile --prefer-offline
+            fi
+            
+            # Run specific test files for this shard
+            if [ -n "${{ matrix.test-files }}" ]; then
+              yarn test --testPathPattern="${{ matrix.test-files }}" --coverage --testTimeout=60000 --outputFile=test-results-integration-${{ matrix.shard }}.json
+            else
+              yarn test:integration --shard ${{ matrix.shard }}/${{ matrix.shard-total }} --coverage --outputFile=test-results-integration-${{ matrix.shard }}.json
+            fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results-shard-${{ matrix.shard }}
+          path: |
+            test-results-integration-${{ matrix.shard }}.json
+            coverage/lcov.info
+          retention-days: 7
+
+  parallel-other-tests:
+    name: Other Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: generate-test-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.generate-test-matrix.outputs.test-matrix) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run other tests in DevContainer
+        if: matrix.test-category == 'other'
+        uses: devcontainers/ci@v0.3
+        with:
+          imageName: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          runCmd: |
+            echo "Running other tests"
+            
+            # Install dependencies if needed
+            if [ ! -d "node_modules" ]; then
+              yarn install --frozen-lockfile --prefer-offline
+            fi
+            
+            # Run deployment tests
+            yarn test:deployment --coverage --testTimeout=60000 --outputFile=test-results-other.json
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: other-test-results
+          path: |
+            test-results-other.json
+            coverage/lcov.info
+          retention-days: 7
+
+  aggregate-results:
+    name: Aggregate Test Results
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [parallel-unit-tests, parallel-integration-tests, parallel-other-tests]
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.19.0'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          path: test-results/
+
+      - name: Aggregate test results and coverage
+        run: |
+          node scripts/aggregate-test-results.js --input test-results/ --output aggregated-results.json
+          node scripts/generate-test-report.js --input test-results/ --output coverage/
+
+      - name: Upload aggregated results
+        uses: actions/upload-artifact@v4
+        with:
+          name: aggregated-test-results
+          path: |
+            aggregated-results.json
+            coverage/
+          retention-days: 30
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let results = { total_tests: 0, passed: 0, failed: 0, coverage: 0 };
+            
+            try {
+              const data = fs.readFileSync('aggregated-results.json', 'utf8');
+              results = JSON.parse(data);
+            } catch (error) {
+              console.log('Could not read aggregated results:', error.message);
+            }
+            
+            const comment = `
+            ## 🧪 Parallel Test Results
+            
+            **Total Tests**: ${results.total_tests || 0}
+            **Passed**: ${results.passed || 0} ✅
+            **Failed**: ${results.failed || 0} ❌
+            **Coverage**: ${results.coverage || 0}%
+            **Execution Time**: ${results.total_time || 0}s
+            
+            *Results aggregated from parallel test execution*
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
