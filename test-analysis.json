@@ -1,0 +1,25 @@
+{
+  "timestamp": "2025-09-25T23:38:05.318Z",
+  "totalFiles": 7,
+  "categories": {
+    "other": {
+      "files": 1,
+      "totalTime": 94,
+      "totalTests": 12
+    },
+    "integration": {
+      "files": 3,
+      "totalTime": 708,
+      "totalTests": 40
+    },
+    "unit": {
+      "files": 3,
+      "totalTime": 364,
+      "totalTests": 44
+    }
+  },
+  "totalEstimatedTime": 1166,
+  "recommendations": [
+    "Consider using 8 parallel shards to reduce execution time"
+  ]
+}

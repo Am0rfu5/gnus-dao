@@ -1,0 +1,58 @@
+{
+  "test/deployment/DiamondDeployment.test.ts": [
+    {
+      "timestamp": "2025-09-25T23:38:05.319Z",
+      "estimatedTime": 94,
+      "testCount": 12,
+      "category": "other"
+    }
+  ],
+  "test/integration/diamond-abi-generation.test.ts": [
+    {
+      "timestamp": "2025-09-25T23:38:05.319Z",
+      "estimatedTime": 158,
+      "testCount": 8,
+      "category": "integration"
+    }
+  ],
+  "test/integration/rpc/rpc-deployment.test.ts": [
+    {
+      "timestamp": "2025-09-25T23:38:05.319Z",
+      "estimatedTime": 278,
+      "testCount": 17,
+      "category": "integration"
+    }
+  ],
+  "test/integration/security-monitoring-alerting.test.ts": [
+    {
+      "timestamp": "2025-09-25T23:38:05.319Z",
+      "estimatedTime": 272,
+      "testCount": 15,
+      "category": "integration"
+    }
+  ],
+  "test/unit/diamond-abi-generator.test.ts": [
+    {
+      "timestamp": "2025-09-25T23:38:05.319Z",
+      "estimatedTime": 85,
+      "testCount": 9,
+      "category": "unit"
+    }
+  ],
+  "test/unit/rpc/RPCDiamondDeployer.hardhat.test.ts": [
+    {
+      "timestamp": "2025-09-25T23:38:05.319Z",
+      "estimatedTime": 77,
+      "testCount": 8,
+      "category": "unit"
+    }
+  ],
+  "test/unit/rpc/RPCDiamondDeployer.test.ts": [
+    {
+      "timestamp": "2025-09-25T23:38:05.319Z",
+      "estimatedTime": 202,
+      "testCount": 27,
+      "category": "unit"
+    }
+  ]
+}
