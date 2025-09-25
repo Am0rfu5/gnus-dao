@@ -48,7 +48,6 @@ deployments-test/
 .gitattributes
 .gitmodules
 .gitallowed
-.gitsecretsignore
 
 # CI/CD
 .github/
