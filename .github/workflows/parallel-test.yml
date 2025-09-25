@@ -176,11 +176,72 @@ jobs:
             coverage/lcov.info
           retention-days: 7
 
+  multi-chain-tests:
+    name: Multi-Chain Tests (${{ matrix.network }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: generate-test-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        network: [ethereum, polygon, arbitrum, optimism]
+        include: ${{ fromJson(needs.generate-test-matrix.outputs.test-matrix) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.19.0'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Validate multi-chain setup
+        run: node scripts/run-multi-chain-tests.js validate
+
+      - name: Run multi-chain tests in DevContainer
+        uses: devcontainers/ci@v0.3
+        with:
+          imageName: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          runCmd: |
+            echo "Running multi-chain tests on ${{ matrix.network }} for shard ${{ matrix.shard }}"
+            
+            # Install dependencies if needed
+            if [ ! -d "node_modules" ]; then
+              yarn install --frozen-lockfile --prefer-offline
+            fi
+            
+            # Setup blockchain fork
+            node scripts/setup-blockchain-forks.js --network=${{ matrix.network }}
+            
+            # Run tests on specific network
+            if [ "${{ matrix.test-category }}" = "unit" ]; then
+              yarn test:unit --network ${{ matrix.network }}_fork --shard ${{ matrix.shard }}/${{ matrix.shard-total }} --coverage --outputFile=test-results-multichain-${{ matrix.network }}-${{ matrix.shard }}.json
+            elif [ "${{ matrix.test-category }}" = "integration" ]; then
+              yarn test:integration --network ${{ matrix.network }}_fork --shard ${{ matrix.shard }}/${{ matrix.shard-total }} --coverage --outputFile=test-results-multichain-${{ matrix.network }}-${{ matrix.shard }}.json
+            else
+              yarn test:deployment --network ${{ matrix.network }}_fork --coverage --outputFile=test-results-multichain-${{ matrix.network }}-deployment.json
+            fi
+
+      - name: Upload multi-chain test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multichain-test-results-${{ matrix.network }}-shard-${{ matrix.shard }}
+          path: |
+            test-results-multichain-${{ matrix.network }}-*.json
+            coverage/lcov.info
+          retention-days: 7
+
   aggregate-results:
     name: Aggregate Test Results
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [parallel-unit-tests, parallel-integration-tests, parallel-other-tests]
+    needs: [parallel-unit-tests, parallel-integration-tests, parallel-other-tests, multi-chain-tests]
     if: always()
 
     steps:
