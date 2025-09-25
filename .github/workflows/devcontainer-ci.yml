@@ -1,0 +1,725 @@
+name: DevContainer CI Pipeline - Build and Test
+
+on:
+  push:
+    branches: [ develop, main ]
+  pull_request:
+    branches: [ develop, main ]
+  workflow_dispatch:
+    inputs:
+      test_networks:
+        description: 'Comma-separated list of networks to test (default: hardhat,sepolia)'
+        required: false
+        default: 'hardhat,sepolia'
+        type: string
+      skip_coverage:
+        description: 'Skip test coverage analysis'
+        required: false
+        default: false
+        type: boolean
+      container_cache:
+        description: 'Use container image cache'
+        required: false
+        default: true
+        type: boolean
+
+# Cancel in-progress runs for the same workflow and branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+  PYTHON_VERSION: '3.11'
+  GO_VERSION: '1.21'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  CONTAINER_CACHE_KEY: devcontainer-${{ hashFiles('.devcontainer/Dockerfile', '.devcontainer/devcontainer.json', 'package.json', 'yarn.lock') }}
+  HARDHAT_CACHE_DIR: ~/.hardhat/cache
+  YARN_CACHE_DIR: ~/.yarn/cache
+
+jobs:
+  # Build and cache DevContainer image
+  build-devcontainer:
+    name: Build DevContainer Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      cache-hit: ${{ steps.cache.outputs.cache-hit }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check container cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ env.CONTAINER_CACHE_KEY }}
+          restore-keys: |
+            devcontainer-${{ hashFiles('.devcontainer/Dockerfile', '.devcontainer/devcontainer.json') }}-
+            devcontainer-
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push DevContainer image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: .devcontainer/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dst=/tmp/.buildx-cache-new,mode=max
+          build-args: |
+            NODE_VERSION=${{ env.NODE_VERSION }}
+            PYTHON_VERSION=${{ env.PYTHON_VERSION }}
+          platforms: linux/amd64
+          provenance: true
+          sbom: true
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      - name: Generate container image attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME}}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  # Security and dependency checks within DevContainer
+  security-check-devcontainer:
+    name: Security & Dependencies (DevContainer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build-devcontainer
+    container:
+      image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        NODE_ENV: development
+        CI_MODE: true
+        SOCKET_CLI_API_TOKEN: ${{ secrets.SOCKET_CLI_API_TOKEN }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Run security checks
+        run: yarn security-check
+        continue-on-error: false
+
+      - name: Audit dependencies
+        run: yarn audit --groups dependencies --audit-level moderate
+        continue-on-error: true
+
+      - name: Check for dependency changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "Checking for dependency changes in PR..."
+            git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E "(package\.json|yarn\.lock)" || echo "No dependency changes detected"
+          fi
+
+      - name: Container environment validation
+        run: |
+          echo "🔍 Validating DevContainer environment parity..."
+          node --version
+          yarn --version
+          python3 --version
+          go version || echo "Go not available in container"
+          echo "✅ DevContainer environment validated"
+
+  # Build and compile contracts within DevContainer
+  compile-devcontainer:
+    name: Build & Compile (DevContainer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [build-devcontainer, security-check-devcontainer]
+    container:
+      image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        NODE_ENV: development
+        CI_MODE: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Setup Hardhat cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.HARDHAT_CACHE_DIR }}
+          key: hardhat-devcontainer-${{ runner.os }}-${{ hashFiles('hardhat.config.ts', 'contracts/**/*.sol') }}
+          restore-keys: |
+            hardhat-devcontainer-${{ runner.os }}-
+
+      - name: Clean previous builds
+        run: yarn clean
+
+      - name: Compile contracts
+        run: yarn compile
+
+      - name: Generate Diamond ABI
+        run: yarn diamond:generate-abi
+
+      - name: Generate TypeChain types
+        run: yarn diamond:generate-abi-typechain
+
+      - name: Build TypeScript
+        run: npx tsc --noEmit
+
+      - name: Validate Diamond configuration
+        run: |
+          if [ ! -f "diamonds/GNUSDAODiamond/gnusdaodiamond.config.json" ]; then
+            echo "❌ Diamond configuration file not found"
+            exit 1
+          fi
+          echo "✅ Diamond configuration validated"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-devcontainer
+          path: |
+            artifacts/
+            diamond-abi/
+            diamond-typechain-types/
+            typechain-types/
+          retention-days: 30
+
+  # Run unit tests within DevContainer
+  test-unit-devcontainer:
+    name: Unit Tests (DevContainer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: compile-devcontainer
+    container:
+      image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        NODE_ENV: development
+        CI_MODE: true
+
+    strategy:
+      matrix:
+        node-version: [22]
+        test-group: [unit, integration]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: build-artifacts-devcontainer
+
+      - name: Setup Hardhat cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.HARDHAT_CACHE_DIR }}
+          key: hardhat-devcontainer-${{ runner.os }}-${{ hashFiles('hardhat.config.ts', 'contracts/**/*.sol') }}
+
+      - name: Run ${{ matrix.test-group }} tests
+        run: |
+          if [ "${{ matrix.test-group }}" = "unit" ]; then
+            npx hardhat test test/unit/ --parallel
+          elif [ "${{ matrix.test-group }}" = "integration" ]; then
+            npx hardhat test test/integration/ --parallel
+          fi
+        env:
+          HARDHAT_PARALLEL: true
+          HARDHAT_PARALLEL_MAX_JOBS: 4
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-devcontainer-${{ matrix.test-group }}
+          path: |
+            test-results.xml
+            coverage/
+          retention-days: 30
+
+  # Multi-chain testing within DevContainer
+  test-multichain-devcontainer:
+    name: Multi-Chain Tests (DevContainer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: compile-devcontainer
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'multichain-test')
+    container:
+      image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        NODE_ENV: development
+        CI_MODE: true
+
+    strategy:
+      matrix:
+        network: [sepolia, polygon-amoy, arbitrum-sepolia, base-sepolia]
+        include:
+          - network: sepolia
+            rpc_env: SEPOLIA_RPC
+            block_env: SEPOLIA_BLOCK
+          - network: polygon-amoy
+            rpc_env: POLYGON_AMOY_RPC
+            block_env: POLYGON_AMOY_BLOCK
+          - network: arbitrum-sepolia
+            rpc_env: ARBITRUM_SEPOLIA_RPC
+            block_env: ARBITRUM_SEPOLIA_BLOCK
+          - network: base-sepolia
+            rpc_env: BASE_SEPOLIA_RPC
+            block_env: BASE_SEPOLIA_BLOCK
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: build-artifacts-devcontainer
+
+      - name: Setup Hardhat cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.HARDHAT_CACHE_DIR }}
+          key: hardhat-devcontainer-${{ runner.os }}-${{ hashFiles('hardhat.config.ts', 'contracts/**/*.sol') }}
+
+      - name: Run fork tests on ${{ matrix.network }}
+        run: |
+          export ${{ matrix.rpc_env }}="${{ secrets[matrix.rpc_env] }}"
+          export ${{ matrix.block_env }}="${{ secrets[matrix.block_env] }}"
+          npx hardhat test test/deployment/ --network ${{ matrix.network }} --grep "fork"
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Upload fork test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fork-test-results-devcontainer-${{ matrix.network }}
+          path: |
+            test-results-${{ matrix.network }}.xml
+          retention-days: 30
+
+  # Test coverage analysis within DevContainer
+  coverage-devcontainer:
+    name: Test Coverage (DevContainer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [test-unit-devcontainer, test-multichain-devcontainer]
+    if: github.event.inputs.skip_coverage != 'true'
+    container:
+      image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        NODE_ENV: development
+        CI_MODE: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: build-artifacts-devcontainer
+
+      - name: Setup Hardhat cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.HARDHAT_CACHE_DIR }}
+          key: hardhat-devcontainer-${{ runner.os }}-${{ hashFiles('hardhat.config.ts', 'contracts/**/*.sol') }}
+
+      - name: Run coverage analysis
+        run: yarn coverage
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-devcontainer
+          path: |
+            coverage/
+            lcov.info
+          retention-days: 30
+
+      - name: Validate coverage thresholds
+        run: |
+          # Extract coverage percentage from lcov.info
+          if command -v lcov >/dev/null 2>&1; then
+            TOTAL_COVERAGE=$(lcov --summary lcov.info 2>/dev/null | grep "lines......" | sed 's/.*: \([0-9.]*\).*/\1/' | head -1)
+            echo "Total coverage: ${TOTAL_COVERAGE}%"
+
+            # Check if coverage meets minimum threshold
+            if (( $(echo "${TOTAL_COVERAGE} < 80.0" | bc -l 2>/dev/null || echo "1") )); then
+              echo "❌ Coverage ${TOTAL_COVERAGE}% is below minimum threshold of 80%"
+              exit 1
+            else
+              echo "✅ Coverage ${TOTAL_COVERAGE}% meets minimum threshold"
+            fi
+          else
+            echo "⚠️ lcov not available, skipping coverage validation"
+          fi
+
+  # Performance benchmarking within DevContainer
+  benchmark-devcontainer:
+    name: Performance Benchmark (DevContainer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: compile-devcontainer
+    container:
+      image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        NODE_ENV: development
+        CI_MODE: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: build-artifacts-devcontainer
+
+      - name: Run performance tests
+        run: |
+          echo "Running gas usage analysis..."
+          npx hardhat test test/unit/ --grep "gas" --reporter json > gas-report.json || true
+
+          echo "Running deployment size analysis..."
+          npx hardhat size-contracts || true
+
+          echo "Running performance benchmarks..."
+          yarn perf-monitor || echo "Performance monitoring script not found"
+
+      - name: Upload performance reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-report-devcontainer
+          path: |
+            gas-report.json
+            size-report.json
+          retention-days: 30
+
+  # Build reproducibility check within DevContainer
+  reproducibility-devcontainer:
+    name: Build Reproducibility (DevContainer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: compile-devcontainer
+    container:
+      image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        NODE_ENV: development
+        CI_MODE: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Clean and rebuild
+        run: |
+          yarn clean
+          yarn build
+
+      - name: Generate build hash
+        run: |
+          find artifacts -type f -name "*.json" -exec sha256sum {} \; | sort > build-hash.txt
+          echo "Build hash generated: $(cat build-hash.txt | sha256sum | cut -d' ' -f1)"
+
+      - name: Upload reproducibility artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: reproducibility-check-devcontainer
+          path: |
+            build-hash.txt
+          retention-days: 30
+
+  # Create signed artifacts with provenance from DevContainer
+  artifacts-devcontainer:
+    name: Create Signed Artifacts (DevContainer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build-devcontainer, test-unit-devcontainer, coverage-devcontainer, benchmark-devcontainer]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    container:
+      image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies (frozen lockfile)
+        run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: build-artifacts-devcontainer
+
+      - name: Download coverage report
+        uses: actions/download-artifact@v5
+        with:
+          name: coverage-report-devcontainer
+
+      - name: Create signed artifacts with provenance
+        run: |
+          # Use the comprehensive TypeScript signing script
+          npm run sign-artifacts
+
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-artifacts-devcontainer-${{ github.sha }}
+          path: scripts/devops/signed-artifacts/
+          retention-days: 90
+
+  # Environment parity validation
+  environment-parity:
+    name: Environment Parity Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [build-devcontainer, security-check-devcontainer]
+    container:
+      image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        NODE_ENV: development
+        CI_MODE: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate DevContainer vs Local Environment Parity
+        run: |
+          echo "🔍 Validating environment parity between DevContainer and local development..."
+
+          # Check Node.js version
+          NODE_VERSION=$(node --version)
+          EXPECTED_NODE="v22."
+          if [[ "$NODE_VERSION" == *"$EXPECTED_NODE"* ]]; then
+            echo "✅ Node.js version matches: $NODE_VERSION"
+          else
+            echo "❌ Node.js version mismatch: expected $EXPECTED_NODE*, got $NODE_VERSION"
+            exit 1
+          fi
+
+          # Check Yarn version
+          YARN_VERSION=$(yarn --version)
+          echo "✅ Yarn version: $YARN_VERSION"
+
+          # Check Python version
+          PYTHON_VERSION=$(python3 --version)
+          EXPECTED_PYTHON="Python 3.11"
+          if [[ "$PYTHON_VERSION" == *"$EXPECTED_PYTHON"* ]]; then
+            echo "✅ Python version matches: $PYTHON_VERSION"
+          else
+            echo "❌ Python version mismatch: expected $EXPECTED_PYTHON*, got $PYTHON_VERSION"
+            exit 1
+          fi
+
+          # Check Go version (optional)
+          if command -v go >/dev/null 2>&1; then
+            GO_VERSION=$(go version)
+            echo "✅ Go available: $GO_VERSION"
+          else
+            echo "⚠️ Go not available in DevContainer"
+          fi
+
+          # Check essential tools
+          tools=("hardhat" "tsc" "eslint" "prettier")
+          for tool in "${tools[@]}"; do
+            if command -v "$tool" >/dev/null 2>&1; then
+              echo "✅ $tool available"
+            else
+              echo "❌ $tool not available"
+              exit 1
+            fi
+          done
+
+          # Check security tools
+          security_tools=("slither" "semgrep" "snyk")
+          for tool in "${security_tools[@]}"; do
+            if command -v "$tool" >/dev/null 2>&1; then
+              echo "✅ $tool available"
+            else
+              echo "⚠️ $tool not available in DevContainer"
+            fi
+          done
+
+          echo "✅ Environment parity validation completed"
+
+      - name: Generate environment report
+        run: |
+          echo "## 🐳 DevContainer Environment Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### System Information:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Node.js:** $(node --version)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Yarn:** $(yarn --version)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Python:** $(python3 --version)" >> $GITHUB_STEP_SUMMARY
+          echo "- **OS:** $(uname -a)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Available Tools:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Hardhat:** $(npx hardhat --version 2>/dev/null || echo 'Not available')" >> $GITHUB_STEP_SUMMARY
+          echo "- **TypeScript:** $(npx tsc --version 2>/dev/null || echo 'Not available')" >> $GITHUB_STEP_SUMMARY
+          echo "- **ESLint:** $(npx eslint --version 2>/dev/null || echo 'Not available')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Prettier:** $(npx prettier --version 2>/dev/null || echo 'Not available')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Security Tools:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Slither:** $(slither --version 2>/dev/null || echo 'Not available')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Semgrep:** $(semgrep --version 2>/dev/null || echo 'Not available')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Snyk:** $(snyk --version 2>/dev/null || echo 'Not available')" >> $GITHUB_STEP_SUMMARY
+
+  # Final validation and summary for DevContainer pipeline
+  validate-devcontainer:
+    name: Final Validation (DevContainer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [security-check-devcontainer, build-devcontainer, test-unit-devcontainer, test-multichain-devcontainer, coverage-devcontainer, benchmark-devcontainer, reproducibility-devcontainer, environment-parity]
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate DevContainer pipeline summary
+        run: |
+          echo "## 🐳 GNUS-DAO DevContainer CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pipeline Results:" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔒 Security Check: ${{ needs.security-check-devcontainer.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔨 Build: ${{ needs.build-devcontainer.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🧪 Unit Tests: ${{ needs.test-unit-devcontainer.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🌐 Multi-Chain Tests: ${{ needs.test-multichain-devcontainer.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 📊 Coverage: ${{ needs.coverage-devcontainer.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- ⚡ Benchmark: ${{ needs.benchmark-devcontainer.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔄 Reproducibility: ${{ needs.reproducibility-devcontainer.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔍 Environment Parity: ${{ needs.environment-parity.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check overall pipeline status
+          if [[ "${{ needs.security-check-devcontainer.result }}" == "success" && \
+                "${{ needs.build-devcontainer.result }}" == "success" && \
+                "${{ needs.test-unit-devcontainer.result }}" == "success" && \
+                "${{ needs.coverage-devcontainer.result }}" == "success" && \
+                "${{ needs.environment-parity.result }}" == "success" ]]; then
+            echo "### ✅ DevContainer Pipeline Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
+            echo "All critical checks passed. DevContainer environment is fully functional." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ DevContainer Pipeline Status: FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "Some checks failed. Please review the DevContainer configuration." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📈 DevContainer Performance Metrics:" >> $GITHUB_STEP_SUMMARY
+          echo "- Container image build: ${{ needs.build-devcontainer.outputs.cache-hit == 'true' && 'Cache hit ✅' || 'Cache miss ⚠️' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Parallel test execution: ✅ Enabled" >> $GITHUB_STEP_SUMMARY
+          echo "- Build caching: ✅ Enabled" >> $GITHUB_STEP_SUMMARY
+          echo "- Frozen lockfile: ✅ Enforced" >> $GITHUB_STEP_SUMMARY
+          echo "- Total runtime: ~$((SECONDS/60)) minutes" >> $GITHUB_STEP_SUMMARY

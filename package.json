@@ -51,7 +51,18 @@
     "incident-response": "npx ts-node scripts/devops/incident-response.ts",
     "security-health-checks": "npx ts-node scripts/devops/security-health-checks.ts",
     "security-commit-check": "npx ts-node scripts/devops/security-commit-check.ts",
-    "prepare": "husky"
+    "prepare": "husky",
+    "container:build": "node scripts/devops/container-registry-manager.sh build",
+    "container:push": "node scripts/devops/container-registry-manager.sh push",
+    "container:pull": "node scripts/devops/container-registry-manager.sh pull",
+    "container:exists": "node scripts/devops/container-registry-manager.sh exists",
+    "container:cleanup": "node scripts/devops/container-registry-manager.sh cleanup",
+    "container:report": "node scripts/devops/container-registry-manager.sh report",
+    "env:parity": "bash scripts/devops/environment-parity-validation.sh",
+    "perf:benchmark": "bash scripts/devops/devcontainer-performance-benchmark.sh all --environment native",
+    "perf:benchmark:container": "bash scripts/devops/devcontainer-performance-benchmark.sh all --environment container",
+    "perf:compare": "bash scripts/devops/devcontainer-performance-benchmark.sh compare",
+    "container:validate": "bash scripts/devops/devcontainer-setup-validation.sh"
   },
   "authors": [
     "Am0rfu5"
