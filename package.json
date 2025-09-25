@@ -51,6 +51,17 @@
     "incident-response": "npx ts-node scripts/devops/incident-response.ts",
     "security-health-checks": "npx ts-node scripts/devops/security-health-checks.ts",
     "security-commit-check": "npx ts-node scripts/devops/security-commit-check.ts",
+    "devcontainer-validate": "./scripts/devops/gh-devcon/validate-devcontainer.sh",
+    "devcontainer-validate-native": "./scripts/devops/gh-devcon/validate-devcontainer.sh --no-container",
+    "devcontainer-validate-container": "./scripts/devops/gh-devcon/validate-devcontainer.sh --no-native",
+    "devcontainer-validate-parity": "./scripts/devops/gh-devcon/validate-devcontainer.sh --no-report",
+    "gh-devcontainer": "./scripts/devops/gh-devcon/gh-devcontainer-workflow.sh",
+    "gh-devcontainer-run": "./scripts/devops/gh-devcon/gh-devcontainer-workflow.sh run",
+    "gh-devcontainer-build": "./scripts/devops/gh-devcon/gh-devcontainer-workflow.sh build",
+    "gh-devcontainer-watch": "./scripts/devops/gh-devcon/gh-devcontainer-workflow.sh watch",
+    "gh-devcontainer-logs": "./scripts/devops/gh-devcon/gh-devcontainer-workflow.sh logs",
+    "gh-devcontainer-pr-status": "./scripts/devops/gh-devcon/gh-devcontainer-workflow.sh pr-status",
+    "gh-devcontainer-validate": "./scripts/devops/gh-devcon/gh-devcontainer-workflow.sh validate",
     "prepare": "husky"
   },
   "authors": [

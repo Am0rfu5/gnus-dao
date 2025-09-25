@@ -1,0 +1,116 @@
+# GNUS-DAO DevContainer .dockerignore
+# Optimized for build performance and security
+
+# Node.js dependencies (will be installed in container)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build artifacts
+artifacts/
+cache/
+diamond-abi/
+diamond-typechain-types/
+typechain-types/
+dist/
+build/
+*.tsbuildinfo
+
+# Test artifacts and coverage
+coverage/
+coverage.json
+test-results.xml
+lcov-report/
+*.lcov
+
+# Logs
+logs/
+*.log
+hook-performance.log
+security-commits.log
+
+# Reports
+reports/
+health-report.json
+security-tool-update-report.json
+smart-trigger-report.json
+cost-analyzer/
+
+# Test assets and outputs
+test-assets/
+test-output/
+deployments-test/
+
+# Git and version control
+.git/
+.gitignore
+.gitattributes
+.gitmodules
+.gitallowed
+.gitsecretsignore
+
+# CI/CD
+.github/
+.github-actions-cache/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Documentation build artifacts
+docs/_build/
+docs/.doctrees/
+
+# Flat files (generated)
+flat/
+
+# Security tools cache
+.slither/
+.mypy_cache/
+.pytest_cache/
+__pycache__/
+
+# Yarn
+.yarn/cache/
+.yarn/install-state.gz
+
+# Hardhat
+.hardhat/
+
+# Foundry (if used)
+out/
+forge-cache/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Package manager lock files (keep yarn.lock for build)
+package-lock.json
+pnpm-lock.yaml
+
+# CI performance monitoring
+ci-performance-dashboard.js
+ci-perf-monitor.js
+
+# Emergency bypass logs
+emergency-bypass.log

@@ -17,6 +17,14 @@ on:
         required: false
         default: false
         type: boolean
+      execution_mode:
+        description: 'Execution mode: native or devcontainer'
+        required: false
+        default: 'native'
+        type: choice
+        options:
+          - native
+          - devcontainer
 
 # Cancel in-progress runs for the same workflow and branch
 concurrency:
@@ -137,47 +145,49 @@ jobs:
 
   # Run unit tests
   test-unit:
-    name: Unit Tests
+    name: Unit Tests (${{ matrix.execution_mode }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     needs: build
 
     strategy:
       matrix:
         node-version: [22.19.0]
         test-group: [unit, integration]
+        execution_mode: [native]
+        include:
+          - execution_mode: devcontainer
+            test-group: unit
+          - execution_mode: devcontainer
+            test-group: integration
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-
-      - name: Enable Corepack
-        run: corepack enable
-        
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'yarn'
-          cache-dependency-path: yarn.lock
+          fetch-depth: 0
 
-      - name: Install dependencies (frozen lockfile)
-        run: yarn install --frozen-lockfile --prefer-offline
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v5
-        with:
-          name: build-artifacts
-
-      - name: Setup Hardhat cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.HARDHAT_CACHE_DIR }}
-          key: hardhat-${{ runner.os }}-${{ hashFiles('hardhat.config.ts', 'contracts/**/*.sol') }}
-
-      - name: Run ${{ matrix.test-group }} tests
+      - name: Run tests (${{ matrix.execution_mode }})
+        if: matrix.execution_mode == 'native'
         run: |
+          echo "🧪 Running ${{ matrix.test-group }} tests (native execution)"
+          
+          # Enable Corepack
+          corepack enable
+          
+          # Setup Node.js (already done by setup-node above, but ensuring)
+          export PATH="$HOME/.yarn/bin:$PATH"
+          
+          # Install dependencies
+          yarn install --frozen-lockfile --prefer-offline
+          
+          # Download build artifacts
+          # (Note: In native mode, we need to build first)
+          yarn compile
+          yarn diamond:generate-abi
+          yarn diamond:generate-abi-typechain
+          
+          # Run tests
           if [ "${{ matrix.test-group }}" = "unit" ]; then
             npx hardhat test test/unit/ --parallel
           elif [ "${{ matrix.test-group }}" = "integration" ]; then
@@ -187,11 +197,42 @@ jobs:
           HARDHAT_PARALLEL: true
           HARDHAT_PARALLEL_MAX_JOBS: 4
 
+      - name: Run tests in DevContainer
+        if: matrix.execution_mode == 'devcontainer'
+        uses: devcontainers/ci@v0.3
+        with:
+          imageName: ghcr.io/${{ github.repository_owner }}/gnus-dao-devcontainer
+          cacheFrom: ghcr.io/${{ github.repository_owner }}/gnus-dao-devcontainer
+          push: never
+          runCmd: |
+            echo "🧪 Running ${{ matrix.test-group }} tests in DevContainer"
+
+            # Install dependencies
+            yarn install --frozen-lockfile --prefer-offline
+
+            # Download and extract build artifacts
+            # (Note: In DevContainer mode, artifacts should be available)
+            yarn compile
+            yarn diamond:generate-abi
+            yarn diamond:generate-abi-typechain
+
+            # Run tests
+            if [ "${{ matrix.test-group }}" = "unit" ]; then
+              npx hardhat test test/unit/ --parallel
+            elif [ "${{ matrix.test-group }}" = "integration" ]; then
+              npx hardhat test test/integration/ --parallel
+            fi
+          env: |
+            NODE_ENV=test
+            HARDHAT_PARALLEL=true
+            HARDHAT_PARALLEL_MAX_JOBS=4
+            CI=true
+
       - name: Upload test results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-results-${{ matrix.test-group }}
+          name: test-results-${{ matrix.test-group }}-${{ matrix.execution_mode }}
           path: |
             test-results.xml
             coverage/

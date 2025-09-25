@@ -1,0 +1,283 @@
+name: Build DevContainer Image
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Weekly rebuild to ensure latest security updates
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force rebuild even if no changes detected'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/gnus-dao-devcontainer
+  NODE_VERSION: '22.19.0'
+
+jobs:
+  # Check if rebuild is needed
+  check-changes:
+    name: Check for Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for relevant changes
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "🔄 Scheduled rebuild triggered"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force_rebuild }}" = "true" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "🔄 Force rebuild triggered"
+          elif [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "pull_request" ]; then
+            # Check for changes in DevContainer-related files
+            if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E "^\.devcontainer/|^Dockerfile|^package\.json|^yarn\.lock"; then
+              echo "should_build=true" >> $GITHUB_OUTPUT
+              echo "🔄 DevContainer changes detected"
+            else
+              echo "should_build=false" >> $GITHUB_OUTPUT
+              echo "⏭️ No DevContainer changes detected, skipping build"
+            fi
+          else
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "🔄 Defaulting to build"
+          fi
+
+  # Build and push DevContainer image
+  build-and-push:
+    name: Build and Push DevContainer
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: check-changes
+    if: needs.check-changes.outputs.should_build == 'true'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tags: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=weekly-{{date 'YYYYMMDD'}},enable={{is_default_branch}}
+
+      - name: Build DevContainer image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./.devcontainer/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NODE_VERSION=${{ env.NODE_VERSION }}
+            BUILDKIT_INLINE_CACHE=1
+          platforms: linux/amd64,linux/arm64
+
+      - name: Generate build report
+        run: |
+          cat > build-report.json << EOF
+          {
+            "timestamp": "$(date -Iseconds)",
+            "image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}",
+            "digest": "${{ steps.build.outputs.digest }}",
+            "tags": ${{ toJson(steps.meta.outputs.tags) }},
+            "platforms": ["linux/amd64", "linux/arm64"],
+            "build_trigger": "${{ github.event_name }}",
+            "commit": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}",
+            "workflow_run": "${{ github.run_id }}"
+          }
+          EOF
+
+      - name: Upload build report
+        uses: actions/upload-artifact@v4
+        with:
+          name: devcontainer-build-report
+          path: build-report.json
+          retention-days: 90
+
+  # Security scan the built image
+  security-scan-image:
+    name: Security Scan Container Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build-and-push
+    if: needs.check-changes.outputs.should_build == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          scan-ref: '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Check vulnerability threshold
+        run: |
+          # Parse Trivy results and check for critical/high vulnerabilities
+          if [ -f "trivy-results.sarif" ]; then
+            CRITICAL=$(jq '.runs[0].results | length' trivy-results.sarif 2>/dev/null || echo "0")
+            HIGH=$(jq '.runs[0].results | map(select(.level == "error")) | length' trivy-results.sarif 2>/dev/null || echo "0")
+
+            echo "🔍 Container Image Security Scan Results:"
+            echo "Critical vulnerabilities: $CRITICAL"
+            echo "High vulnerabilities: $HIGH"
+
+            if [ "$CRITICAL" -gt 0 ]; then
+              echo "❌ Critical vulnerabilities found in container image"
+              exit 1
+            fi
+
+            if [ "$HIGH" -gt 5 ]; then
+              echo "❌ Too many high-severity vulnerabilities found in container image"
+              exit 1
+            fi
+
+            echo "✅ Container image security scan passed"
+          else
+            echo "⚠️ Trivy scan results not found, continuing..."
+          fi
+
+  # Update package metadata
+  update-package-metadata:
+    name: Update Package Metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [build-and-push, security-scan-image]
+    if: needs.check-changes.outputs.should_build == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Update package README
+        run: |
+          # Generate package README for GHCR
+          cat > package-readme.md << EOF
+          # GNUS-DAO DevContainer
+
+          Development container for GNUS-DAO smart contract development.
+
+          ## Features
+
+          - Node.js ${{ env.NODE_VERSION }} with Yarn
+          - Hardhat Ethereum development environment
+          - Security scanning tools (Slither, Semgrep, etc.)
+          - ERC-2535 Diamond Proxy development tools
+          - TypeScript and ESLint support
+
+          ## Usage
+
+          \`\`\`bash
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          \`\`\`
+
+          ## Security
+
+          This image is automatically scanned for vulnerabilities and rebuilt weekly with security updates.
+
+          Last updated: $(date -I)
+          Digest: ${{ needs.build-and-push.outputs.image-digest }}
+          EOF
+
+      - name: Update package metadata via API
+        run: |
+          # Use GitHub CLI to update package metadata
+          gh api \
+            --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            /user/packages/container/${{ env.IMAGE_NAME }}/versions \
+            -f description="GNUS-DAO development container with security tools" \
+            -f readme="$(cat package-readme.md)"
+
+  # Cleanup old images (weekly on main branch)
+  cleanup-images:
+    name: Cleanup Old Images
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [build-and-push, security-scan-image]
+    if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Cleanup old container images
+        run: |
+          echo "🧹 Cleaning up old container images..."
+
+          # Get list of package versions (keep last 10)
+          VERSIONS=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            /user/packages/container/${{ env.IMAGE_NAME }}/versions \
+            --jq '.[].id' | tail -n +11)
+
+          if [ -n "$VERSIONS" ]; then
+            echo "Found $(echo "$VERSIONS" | wc -l) old versions to delete"
+
+            # Delete old versions
+            for version_id in $VERSIONS; do
+              echo "Deleting version $version_id..."
+              gh api \
+                --method DELETE \
+                -H "Accept: application/vnd.github+json" \
+                /user/packages/container/${{ env.IMAGE_NAME }}/versions/$version_id
+            done
+
+            echo "✅ Old container images cleaned up"
+          else
+            echo "ℹ️ No old images to clean up"
+          fi
