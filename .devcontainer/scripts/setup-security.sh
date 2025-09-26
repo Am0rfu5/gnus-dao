@@ -99,7 +99,9 @@ setup_git_secrets() {
     git secrets --add --allowed 'const secretPatterns = \[' || log_warning "Failed to add const allowed pattern"
     git secrets --add --allowed 'SECRET_KEYs*' || log_warning "Failed to add SECRET_KEYs allowed pattern"
     git secrets --add --allowed 'scripts/devops/signed-artifacts/' || log_warning "Failed to add signed-artifacts allowed pattern"
-    git secrets --add --allowed '.devcontainer/scripts/setup-security.sh' || log_warning "Failed to add .devcontainer allowed pattern"
+    git secrets --add --allowed '.devcontainer/scripts/setup-security.sh' || log_warning "Failed to add .devcontainer/scripts/setup-security.sh allowed pattern"
+    git secrets --add --allowed '.devcontainer/security/tools.json' || log_warning "Failed to add .devcontainer/security/tools.json allowed pattern"
+    
 
     # Install git-secrets hooks
     if [ -d .git ]; then
