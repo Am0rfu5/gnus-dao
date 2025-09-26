@@ -1,0 +1,259 @@
+name: Monitor Environment Drift
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      force_check:
+        description: 'Force immediate environment check'
+        required: false
+        type: boolean
+        default: false
+      update_baseline:
+        description: 'Update environment baseline'
+        required: false
+        type: boolean
+        default: false
+      alert_threshold:
+        description: 'Alert threshold level'
+        required: false
+        type: choice
+        options:
+          - low
+          - medium
+          - high
+          - critical
+        default: 'medium'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/gnus-dao-devcontainer
+
+jobs:
+  monitor-drift:
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build TypeScript
+        run: yarn tsc
+
+      - name: Download baseline fingerprint
+        uses: actions/cache@v3
+        id: baseline-cache
+        with:
+          path: environment-baseline.json
+          key: environment-baseline-${{ github.ref_name }}
+          restore-keys: |
+            environment-baseline-main
+            environment-baseline-develop
+
+      - name: Create initial baseline (if not exists)
+        if: steps.baseline-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "📋 Creating initial environment baseline..."
+          npx ts-node scripts/devops/gh-devcon/fingerprint-environment.ts \
+            --output environment-baseline.json \
+            --verbose
+
+          # Cache the baseline
+          echo "Baseline created and will be cached"
+
+      - name: Force check (if requested)
+        if: github.event.inputs.force_check == 'true'
+        run: |
+          echo "🔍 Performing forced environment drift check..."
+          npx ts-node scripts/devops/gh-devcon/detect-environment-drift.ts \
+            --baseline environment-baseline.json \
+            --output forced-drift-analysis.json \
+            --report
+
+      - name: Update baseline (if requested)
+        if: github.event.inputs.update_baseline == 'true'
+        run: |
+          echo "📋 Updating environment baseline..."
+          npx ts-node scripts/devops/gh-devcon/fingerprint-environment.ts \
+            --output environment-baseline.json \
+            --verbose
+
+          echo "Baseline updated successfully"
+
+      - name: Run scheduled drift detection
+        if: github.event.schedule != ''
+        run: |
+          echo "🔍 Running scheduled environment drift detection..."
+          ALERT_THRESHOLD="${{ github.event.inputs.alert_threshold || 'medium' }}"
+          npx ts-node scripts/devops/gh-devcon/detect-environment-drift.ts \
+            --baseline environment-baseline.json \
+            --output scheduled-drift-analysis.json \
+            --report
+
+      - name: Determine analysis file
+        id: analysis
+        run: |
+          if [ -f forced-drift-analysis.json ]; then
+            ANALYSIS_FILE="forced-drift-analysis.json"
+            ANALYSIS_TYPE="forced"
+          elif [ -f scheduled-drift-analysis.json ]; then
+            ANALYSIS_FILE="scheduled-drift-analysis.json"
+            ANALYSIS_TYPE="scheduled"
+          else
+            echo "No analysis file found"
+            exit 1
+          fi
+          echo "analysis_file=$ANALYSIS_FILE" >> $GITHUB_OUTPUT
+          echo "analysis_type=$ANALYSIS_TYPE" >> $GITHUB_OUTPUT
+
+      - name: Analyze drift results
+        id: drift-check
+        run: |
+          ANALYSIS_FILE="${{ steps.analysis.outputs.analysis_file }}"
+          DRIFT_LEVEL=$(node -e "console.log(require('./' + process.env.ANALYSIS_FILE).drift_level)")
+          ALERT_REQUIRED=$(node -e "console.log(require('./' + process.env.ANALYSIS_FILE).alert_required)")
+          CRITICAL_CHANGES=$(node -e "console.log(require('./' + process.env.ANALYSIS_FILE).critical_changes)")
+          WARNING_CHANGES=$(node -e "console.log(require('./' + process.env.ANALYSIS_FILE).warning_changes)")
+          TOTAL_CHANGES=$(node -e "console.log(require('./' + process.env.ANALYSIS_FILE).changes_since_baseline)")
+
+          echo "drift_level=$DRIFT_LEVEL" >> $GITHUB_OUTPUT
+          echo "alert_required=$ALERT_REQUIRED" >> $GITHUB_OUTPUT
+          echo "critical_changes=$CRITICAL_CHANGES" >> $GITHUB_OUTPUT
+          echo "warning_changes=$WARNING_CHANGES" >> $GITHUB_OUTPUT
+          echo "total_changes=$TOTAL_CHANGES" >> $GITHUB_OUTPUT
+
+      - name: Send alerts (if required)
+        if: steps.drift-check.outputs.alert_required == 'true'
+        run: |
+          ANALYSIS_FILE="${{ steps.analysis.outputs.analysis_file }}"
+          echo "🚨 Sending environment drift alerts..."
+          npx ts-node scripts/devops/gh-devcon/alert-environment-drift.ts \
+            --command alert \
+            --analysis "$ANALYSIS_FILE"
+
+      - name: Update baseline cache
+        if: github.event.inputs.update_baseline == 'true'
+        uses: actions/cache@v3
+        with:
+          path: environment-baseline.json
+          key: environment-baseline-${{ github.ref_name }}
+
+      - name: Generate drift summary
+        run: |
+          ANALYSIS_FILE="${{ steps.analysis.outputs.analysis_file }}"
+          ANALYSIS_TYPE="${{ steps.analysis.outputs.analysis_type }}"
+
+          echo "## 🔍 Environment Drift Detection Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Analysis Type**: $ANALYSIS_TYPE" >> $GITHUB_STEP_SUMMARY
+          echo "**Drift Level**: ${{ steps.drift-check.outputs.drift_level }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Alert Required**: ${{ steps.drift-check.outputs.alert_required }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Critical Changes**: ${{ steps.drift-check.outputs.critical_changes }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Warning Changes**: ${{ steps.drift-check.outputs.warning_changes }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Total Changes**: ${{ steps.drift-check.outputs.total_changes }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.drift-check.outputs.alert_required }}" = "true" ]; then
+            echo "🚨 **Alert Status**: Sent" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **Alert Status**: Not required" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Recommendations" >> $GITHUB_STEP_SUMMARY
+          node -e "
+            const analysis = require('./' + process.env.ANALYSIS_FILE);
+            if (analysis.recommendations && analysis.recommendations.length > 0) {
+              analysis.recommendations.forEach(rec => console.log('- ' + rec));
+            } else {
+              console.log('- No specific recommendations');
+            }
+          " >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload drift analysis artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: environment-drift-analysis-${{ github.run_id }}
+          path: |
+            *-drift-analysis.json
+            environment-baseline.json
+          retention-days: 30
+
+      - name: Fail workflow on critical drift
+        if: steps.drift-check.outputs.drift_level == 'critical'
+        run: |
+          echo "❌ Critical environment drift detected!"
+          echo "Drift Level: ${{ steps.drift-check.outputs.drift_level }}"
+          echo "Critical Changes: ${{ steps.drift-check.outputs.critical_changes }}"
+          exit 1
+
+  notify-drift:
+    needs: monitor-drift
+    runs-on: ubuntu-latest
+    if: always() && needs.monitor-drift.result == 'failure'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download drift analysis
+        uses: actions/download-artifact@v3
+        with:
+          name: environment-drift-analysis-${{ github.run_id }}
+
+      - name: Create issue on critical drift
+        if: needs.monitor-drift.outputs.drift_level == 'critical'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const analysisFiles = fs.readdirSync('.').filter(f => f.endsWith('-drift-analysis.json'));
+            let analysis = null;
+
+            if (analysisFiles.length > 0) {
+              analysis = JSON.parse(fs.readFileSync(analysisFiles[0], 'utf8'));
+            }
+
+            const title = `🚨 Critical Environment Drift Detected`;
+            const body = `
+            ## Critical Environment Drift Alert
+
+            **Drift Level**: ${analysis?.drift_level || 'Unknown'}
+            **Critical Changes**: ${analysis?.critical_changes || 0}
+            **Total Changes**: ${analysis?.changes_since_baseline || 0}
+
+            ### Recommendations
+            ${analysis?.recommendations?.map(rec => `- ${rec}`).join('\n') || 'No recommendations available'}
+
+            ### Actions Required
+            - [ ] Review environment changes
+            - [ ] Update CI/CD configurations if necessary
+            - [ ] Test affected workflows
+            - [ ] Update environment baseline if changes are intentional
+
+            *This issue was automatically created by the environment drift monitoring system.*
+            `;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['environment-drift', 'critical', 'automated']
+            });
