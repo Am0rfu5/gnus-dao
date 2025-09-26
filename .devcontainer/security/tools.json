@@ -1,0 +1,131 @@
+{
+  "version": "1.0.0",
+  "description": "Security tool configurations for GNUS-DAO DevContainer environment",
+  "tools": {
+    "snyk": {
+      "version": "latest",
+      "command": "snyk",
+      "authentication": {
+        "env_var": "SNYK_TOKEN",
+        "required": true
+      },
+      "config": {
+        "severity-threshold": "high",
+        "json": true,
+        "fail-on": "upgradable"
+      },
+      "cache": {
+        "enabled": true,
+        "ttl_hours": 24
+      }
+    },
+    "socket": {
+      "version": "latest",
+      "command": "socket",
+      "authentication": {
+        "env_var": "SOCKET_API_KEY",
+        "required": true
+      },
+      "config": {
+        "output-format": "json",
+        "fail-on-issues": true
+      },
+      "cache": {
+        "enabled": true,
+        "ttl_hours": 12
+      }
+    },
+    "semgrep": {
+      "version": "latest",
+      "command": "semgrep",
+      "authentication": {
+        "env_var": "SEMGREP_APP_TOKEN",
+        "required": false
+      },
+      "config": {
+        "config": "auto",
+        "json": true,
+        "disable-version-check": true
+      },
+      "cache": {
+        "enabled": true,
+        "ttl_hours": 48
+      }
+    },
+    "git-secrets": {
+      "version": "latest",
+      "command": "git-secrets",
+      "config": {
+        "patterns": [
+          "AWS_ACCESS_KEY",
+          "AWS_SECRET_KEY",
+          "PRIVATE_KEY",
+          "SECRET_KEY",
+          "API_KEY",
+          "TOKEN"
+        ],
+        "allowed": []
+      },
+      "cache": {
+        "enabled": false
+      }
+    },
+    "osv-scanner": {
+      "version": "latest",
+      "command": "osv-scanner",
+      "config": {
+        "format": "json",
+        "lockfile": "yarn.lock",
+        "recursive": true
+      },
+      "cache": {
+        "enabled": true,
+        "ttl_hours": 24
+      }
+    },
+    "slither": {
+      "version": "latest",
+      "command": "slither",
+      "config": {
+        "json": true,
+        "exclude-dependencies": true,
+        "exclude-informational": true,
+        "fail-high": true
+      },
+      "cache": {
+        "enabled": true,
+        "ttl_hours": 24
+      }
+    }
+  },
+  "custom_rules": {
+    "diamond_patterns": {
+      "enabled": true,
+      "path": ".github/security/diamond-patterns.yml",
+      "description": "Custom security patterns for Diamond proxy contracts"
+    },
+    "gnus_dao_patterns": {
+      "enabled": true,
+      "path": ".github/security/gnus-dao-patterns.yml",
+      "description": "GNUS-DAO specific security patterns"
+    }
+  },
+  "environment": {
+    "cache_dir": ".devcontainer/cache/security",
+    "temp_dir": "/tmp/security-scan",
+    "log_level": "info",
+    "parallel_execution": true,
+    "timeout_seconds": 300
+  },
+  "integrations": {
+    "github_security": {
+      "enabled": true,
+      "sarif_upload": true,
+      "category": "devcontainer-security-scan"
+    },
+    "dependabot": {
+      "enabled": true,
+      "alerts_integration": true
+    }
+  }
+}

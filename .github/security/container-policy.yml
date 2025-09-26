@@ -1,0 +1,117 @@
+# GNUS-DAO Container Security Policy
+# Defines security thresholds and compliance requirements for container images
+
+# Vulnerability thresholds
+vulnerabilities:
+  # Critical vulnerabilities - must be zero
+  max_critical: 0
+  
+  # High severity vulnerabilities - limited to prevent deployment
+  max_high: 5
+  
+  # Medium severity - allowed but monitored
+  max_medium: 20
+  
+  # Low severity - informational only
+  max_low: 50
+
+# Base image security requirements
+base_image:
+  # Only allow specific approved base images
+  allowed_images:
+    - "node:22-bookworm-slim"
+    - "node:20-bookworm-slim"
+    - "node:18-bookworm-slim"
+  
+  # Minimum security updates (days since last update)
+  max_age_days: 90
+  
+  # Required security features
+  required_features:
+    - "non-root-user"
+    - "healthcheck"
+    - "security-tools"
+
+# Container build requirements
+build:
+  # Must use multi-stage builds
+  require_multi_stage: true
+  
+  # Must include security scanning
+  require_security_scan: true
+  
+  # Must use cache mounts for performance
+  require_cache_mounts: true
+  
+  # Maximum build time (minutes)
+  max_build_time_minutes: 20
+
+# Runtime security requirements
+runtime:
+  # Must run as non-root user
+  require_non_root: true
+  
+  # Must have health check
+  require_healthcheck: true
+  
+  # Required security tools
+  required_tools:
+    - "slither-analyzer"
+    - "semgrep"
+    - "trufflehog"
+    - "git-secrets"
+  
+  # Exposed ports (must be documented and justified)
+  allowed_ports:
+    - 8545  # Hardhat
+    - 8546  # Ganache
+    - 3000  # Development server
+    - 5000  # Testing
+    - 8080  # Documentation
+
+# Supply chain security
+supply_chain:
+  # Require SBOM generation
+  require_sbom: true
+  
+  # Require provenance attestation
+  require_provenance: false  # Optional for now
+  
+  # Dependency scanning requirements
+  dependency_scan:
+    enabled: true
+    fail_on_high: true
+    fail_on_critical: true
+
+# Compliance requirements
+compliance:
+  # Must pass CIS Docker benchmarks
+  cis_docker_compliance: true
+  
+  # Must follow container best practices
+  best_practices: true
+  
+  # License compliance
+  license_check: true
+
+# Monitoring and alerting
+monitoring:
+  # Enable security monitoring
+  security_alerts: true
+  
+  # Vulnerability trend monitoring
+  vulnerability_trends: true
+  
+  # Performance monitoring
+  performance_metrics: true
+
+# Automated remediation
+remediation:
+  # Auto-update base images
+  auto_update_base: true
+  
+  # Auto-rebuild on security updates
+  auto_rebuild_security: true
+  
+  # Auto-cleanup old images
+  auto_cleanup: true

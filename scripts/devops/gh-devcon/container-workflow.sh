@@ -2,7 +2,7 @@
 
 # GNUS-DAO DevContainer GitHub CLI Workflow Helper
 # Provides step-by-step development process using GitHub CLI
-# Usage: ./gh-devcontainer-workflow.sh [command] [options]
+# Usage: ./devcontainer-workflow.sh [command] [options]
 
 set -euo pipefail
 

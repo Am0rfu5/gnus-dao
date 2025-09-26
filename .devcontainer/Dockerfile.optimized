@@ -1,0 +1,181 @@
+# syntax=docker/dockerfile:1.4
+FROM node:22-bookworm-slim as base
+
+# Metadata
+LABEL org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}"
+LABEL org.opencontainers.image.description="GNUS-DAO Development Container"
+LABEL org.opencontainers.image.licenses="MIT"
+
+# Build arguments
+ARG NODE_VERSION=22
+ARG PYTHON_VERSION=3.11
+ARG GO_VERSION=1.21
+
+# Environment variables for better Docker behavior
+ENV DEBIAN_FRONTEND=noninteractive \
+  PYTHONUNBUFFERED=1 \
+  PIP_DISABLE_PIP_VERSION_CHECK=1 \
+  NODE_ENV=development \
+  YARN_CACHE_FOLDER=/home/node/.yarn/cache \
+  PATH="/home/node/.local/bin:/home/node/.npm-global/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# System dependencies with cache mounts
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+    # Basic system utilities (needed for slim image)
+    ca-certificates \
+    curl \
+    wget \
+    gnupg \
+    # Build tools
+    build-essential \
+    cmake \
+    pkg-config \
+    # Development tools
+    git \
+    jq \
+    lsb-release \
+    software-properties-common \
+    # Python development
+    python3-pip \
+    python3-dev \
+    python3-setuptools \
+    python3-wheel \
+    pipx \
+    # Security tools dependencies
+    libssl-dev \
+    libffi-dev \
+    libxml2-dev \
+    libxslt-dev \
+    libyaml-dev \
+    # Git and version control
+    git-lfs \
+    # Compression tools
+    unzip \
+    xz-utils \
+    # Text processing
+    grep \
+    sed \
+    gawk \
+    # Network tools
+    netcat-openbsd \
+    dnsutils \
+    openssh-client \
+    # Process monitoring
+    htop \
+    procps \
+    # File system tools
+    tree \
+    findutils \
+    # Clean up
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get autoremove -y
+
+# Security tools stage
+FROM base as security-tools
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir \
+    slither-analyzer \
+    semgrep \
+    trufflehog \
+    bandit \
+    safety \
+    pip-audit
+
+# Go installation for OSV-Scanner
+FROM security-tools as go-tools
+RUN curl -L https://go.dev/dl/go1.21.linux-amd64.tar.gz | tar -C /usr/local -xzf -
+ENV PATH="/usr/local/go/bin:$PATH"
+RUN --mount=type=cache,target=/root/go/pkg/mod \
+    go install github.com/google/osv-scanner/cmd/osv-scanner@latest
+
+# Node.js tools stage
+FROM go-tools as node-tools
+RUN npm config set prefix /home/node/.npm-global \
+    && export PATH="/home/node/.npm-global/bin:$PATH" \
+    && npm install -g \
+    snyk \
+    @socketsecurity/cli \
+    semver \
+    ganache \
+    hardhat-shorthand
+
+# Development stage
+FROM node-tools as development
+
+# Create workspace directory as root before switching to node user
+RUN mkdir -p /workspaces/gnus-dao && chown -R node:node /workspaces/gnus-dao
+
+# Enable Corepack to manage Yarn version specified in package.json (must run as root)
+RUN corepack enable
+
+# Install git-secrets globally (must run as root)
+RUN git clone https://github.com/awslabs/git-secrets.git /tmp/git-secrets \
+    && cd /tmp/git-secrets \
+    && make install \
+    && cd / \
+    && rm -rf /tmp/git-secrets
+
+# Install Foundry (optional advanced testing - non-fatal on network issues)
+RUN curl -L https://foundry.paradigm.xyz | bash \
+    && /home/node/.foundry/bin/foundryup \
+    && chmod +x /home/node/.foundry/bin/* || true
+
+# Switch to non-root user (already created by base Node.js image)
+USER node
+WORKDIR /home/node
+
+# Workspace directory already created above, just set workdir
+WORKDIR /workspaces/gnus-dao
+
+# Copy package files for dependency installation optimization
+COPY --chown=node:node package.json yarn.lock ./
+
+# Configure Yarn for better performance (using project-specified version via Corepack)
+RUN yarn config set cacheFolder /home/node/.yarn/cache
+
+# Install dependencies with cache
+RUN --mount=type=cache,target=/home/node/.yarn/cache,uid=1000,gid=1000 \
+    yarn install --frozen-lockfile --production=false
+
+# Copy security configuration files
+COPY --chown=node:node .semgrep.yml ./
+COPY --chown=node:node slither.config.json ./
+COPY --chown=node:node .gitsecretsignore ./
+
+# Configure git-secrets with blockchain-specific patterns
+RUN git config --global secrets.patterns "0x[a-fA-F0-9]{64}" \
+    && git config --global secrets.patterns "mnemonic.*[a-z]{3,}\s+[a-z]{3,}" \
+    && git config --global secrets.patterns "INFURA_API_KEY|ALCHEMY_API_KEY|ETHERSCAN_API_KEY" \
+    && git config --global secrets.patterns "PRIVATE_KEY\s*=\s*[\"']*0x[a-fA-F0-9]{64}[\"']*" \
+    && git config --global secrets.patterns "SECRET_KEY\s*=\s*[\"']*[a-zA-Z0-9]{32,}[\"']*" \
+    && git config --global secrets.allowed "0x0000000000000000000000000000000000000000"
+
+# Create cache directories for performance
+RUN mkdir -p \
+    /workspaces/gnus-dao/node_modules \
+    /workspaces/gnus-dao/artifacts \
+    /workspaces/gnus-dao/cache \
+    /workspaces/gnus-dao/diamond-abi \
+    /workspaces/gnus-dao/diamond-typechain-types \
+    /workspaces/gnus-dao/typechain-types \
+    /workspaces/gnus-dao/coverage \
+    /workspaces/gnus-dao/reports \
+    /workspaces/gnus-dao/logs
+
+# Set proper permissions
+RUN chown -R node:node /workspaces/gnus-dao
+
+# Add health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD node --version && yarn --version && python3 --version && go version
+
+# Security note: Post-create scripts will perform additional security validation and tool setup
+
+# Expose ports for development
+EXPOSE 8545 8546 3000 5000 8080
+
+# Default command
+CMD ["sleep", "infinity"]

@@ -147,25 +147,25 @@ For easier usage, the project includes a comprehensive CLI helper script:
 
 ```bash
 # Show help and available commands
-./scripts/devops/gh-devcon/gh-devcontainer-workflow.sh help
+./scripts/devops/gh-devcon/devcontainer-workflow.sh help
 
 # Run DevContainer CI workflow
-./scripts/devops/gh-devcon/gh-devcontainer-workflow.sh run --test-suite all
+./scripts/devops/gh-devcon/devcontainer-workflow.sh run --test-suite all
 
 # Build DevContainer image
-./scripts/devops/gh-devcon/gh-devcontainer-workflow.sh build --force-rebuild
+./scripts/devops/gh-devcon/devcontainer-workflow.sh build --force-rebuild
 
 # Monitor workflow execution
-./scripts/devops/gh-devcon/gh-devcontainer-workflow.sh watch
+./scripts/devops/gh-devcon/devcontainer-workflow.sh watch
 
 # View workflow logs
-./scripts/devops/gh-devcon/gh-devcontainer-workflow.sh logs
+./scripts/devops/gh-devcon/devcontainer-workflow.sh logs
 
 # Check PR status and checks
-./scripts/devops/gh-devcon/gh-devcontainer-workflow.sh pr-status
+./scripts/devops/gh-devcon/devcontainer-workflow.sh pr-status
 
 # Run complete validation workflow
-./scripts/devops/gh-devcon/gh-devcontainer-workflow.sh validate
+./scripts/devops/gh-devcon/devcontainer-workflow.sh validate
 ```
 
 #### NPM Script Shortcuts

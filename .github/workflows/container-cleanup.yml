@@ -1,0 +1,171 @@
+name: Container Cleanup
+on:
+  schedule:
+    # Weekly cleanup on Sunday at 1 AM UTC
+    - cron: '0 1 * * 0'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Perform dry run without actual deletion'
+        required: false
+        default: true
+        type: boolean
+      keep_versions:
+        description: 'Number of versions to keep (default: 5)'
+        required: false
+        default: '5'
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/gnus-dao-devcontainer
+
+jobs:
+  cleanup:
+    name: Cleanup Old Container Images
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get package versions
+        id: get-versions
+        run: |
+          echo "🔍 Fetching container package versions..."
+          
+          # Get all versions for the package
+          VERSIONS=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            /user/packages/container/${{ env.IMAGE_NAME }}/versions \
+            --jq '.[].id' | tr '\n' ' ')
+          
+          # Count total versions
+          TOTAL_COUNT=$(echo "$VERSIONS" | wc -w)
+          echo "📊 Found $TOTAL_COUNT total versions"
+          
+          # Determine how many to keep
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            KEEP_COUNT=${{ inputs.keep_versions }}
+          else
+            KEEP_COUNT=5
+          fi
+          
+          echo "📦 Keeping last $KEEP_COUNT versions"
+          
+          # Get versions to delete (all except the last N)
+          if [ "$TOTAL_COUNT" -gt "$KEEP_COUNT" ]; then
+            VERSIONS_TO_DELETE=$(echo "$VERSIONS" | tr ' ' '\n' | head -n -$KEEP_COUNT | tr '\n' ' ')
+            DELETE_COUNT=$(echo "$VERSIONS_TO_DELETE" | wc -w)
+            echo "🗑️ Will delete $DELETE_COUNT old versions"
+          else
+            VERSIONS_TO_DELETE=""
+            echo "ℹ️ No versions to delete (total: $TOTAL_COUNT, keeping: $KEEP_COUNT)"
+          fi
+          
+          # Output for subsequent steps
+          echo "versions_to_delete=$VERSIONS_TO_DELETE" >> $GITHUB_OUTPUT
+          echo "total_count=$TOTAL_COUNT" >> $GITHUB_OUTPUT
+          echo "delete_count=$(echo "$VERSIONS_TO_DELETE" | wc -w)" >> $GITHUB_OUTPUT
+          echo "keep_count=$KEEP_COUNT" >> $GITHUB_OUTPUT
+
+      - name: Display cleanup plan
+        run: |
+          echo "Total versions: ${{ steps.get-versions.outputs.total_count }}"          echo "
+          echo "Versions to keep: ${{ steps.get-versions.outputs.keep_count }}"
+          echo "Versions to delete: ${{ steps.get-versions.outputs.delete_count }}"
+          
+          if [ -n "${{ steps.get-versions.outputs.versions_to_delete }}" ]; then
+            echo "Versions for deletion: ${{ steps.get-versions.outputs.versions_to_delete }}"
+          else
+            echo "No versions scheduled for deletion"
+          fi
+
+      - name: Perform cleanup (dry run)
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
+        run: |
+          echo "🔍 DRY RUN MODE - No actual deletions will be performed"
+          echo "📋 Versions that would be deleted: ${{ steps.get-versions.outputs.versions_to_delete }}"
+
+      - name: Perform cleanup (actual)
+        if: (github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
+        run: |
+          echo "� Starting container image cleanup..."
+          
+          DELETED_COUNT=0
+          FAILED_COUNT=0
+          
+          # Delete old versions
+          for version_id in ${{ steps.get-versions.outputs.versions_to_delete }}; do
+            if [ -n "$version_id" ]; then
+              echo "🗑️ Deleting version $version_id..."
+              
+              if gh api \
+                --method DELETE \
+                -H "Accept: application/vnd.github+json" \
+                /user/packages/container/${{ env.IMAGE_NAME }}/versions/$version_id; then
+                echo "✅ Successfully deleted version $version_id"
+                DELETED_COUNT=$((DELETED_COUNT + 1))
+              else
+                echo "❌ Failed to delete version $version_id"
+                FAILED_COUNT=$((FAILED_COUNT + 1))
+              fi
+            fi
+          done
+          
+          echo "📊 Cleanup Summary:"
+          echo "Successfully deleted: $DELETED_COUNT versions"
+          echo "Failed deletions: $FAILED_COUNT versions"
+          
+          if [ "$FAILED_COUNT" -gt 0 ]; then
+            echo "⚠️ Some deletions failed. Check the logs above for details."
+            exit 1
+          else
+            echo "✅ Container cleanup completed successfully"
+          fi
+
+      - name: Generate cleanup report
+        if: always()
+        run: |
+          cat > cleanup-report.json << EOF
+          {
+            "timestamp": "$(date -Iseconds)",
+            "workflow_run": "${{ github.run_id }}",
+            "package": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}",
+            "cleanup_type": "${{ github.event_name }}",
+            "dry_run": ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }},
+            "total_versions": ${{ steps.get-versions.outputs.total_count }},
+            "versions_kept": ${{ steps.get-versions.outputs.keep_count }},
+            "versions_deleted": ${{ steps.get-versions.outputs.delete_count }},
+            "cleanup_success": ${{ job.status == 'success' }}
+          }
+          EOF
+
+      - name: Upload cleanup report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-cleanup-report
+          path: cleanup-report.json
+          retention-days: 90
+
+      - name: Notify cleanup results
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Container cleanup completed successfully"
+            echo "📊 Cleaned up ${{ steps.get-versions.outputs.delete_count }} old versions"
+          else
+            echo "❌ Container cleanup failed"
+            echo "📋 Check the cleanup report for details"
+          fi

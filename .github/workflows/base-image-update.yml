@@ -1,0 +1,213 @@
+name: Base Image Update Check
+on:
+  schedule:
+    # Daily check for base image updates at 6 AM UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      force_update:
+        description: 'Force update even if no changes detected'
+        required: false
+        default: false
+        type: boolean
+      base_image:
+        description: 'Specific base image to check (default: node:22-bookworm-slim)'
+        required: false
+        default: 'node:22-bookworm-slim'
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/gnus-dao-devcontainer
+  BASE_IMAGE: node:22-bookworm-slim
+
+jobs:
+  check-base-image:
+    name: Check for Base Image Updates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      update_available: ${{ steps.check.outputs.update_available }}
+      current_digest: ${{ steps.check.outputs.current_digest }}
+      latest_digest: ${{ steps.check.outputs.latest_digest }}
+      base_image: ${{ steps.check.outputs.base_image }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine base image to check
+        id: base-image
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            BASE_IMAGE="${{ inputs.base_image }}"
+          else
+            BASE_IMAGE="${{ env.BASE_IMAGE }}"
+          fi
+          echo "base_image=$BASE_IMAGE" >> $GITHUB_OUTPUT
+          echo "🔍 Checking base image: $BASE_IMAGE"
+
+      - name: Check for base image updates
+        id: check
+        run: |
+          BASE_IMAGE="${{ steps.base-image.outputs.base_image }}"
+          
+          echo "🔍 Checking for updates to base image: $BASE_IMAGE"
+          
+          # Get current digest from Docker Hub
+          if docker pull "$BASE_IMAGE" > /dev/null 2>&1; then
+            CURRENT_DIGEST=$(docker inspect "$BASE_IMAGE" --format='{{index .RepoDigests 0}}' | cut -d'@' -f2)
+            echo "📋 Current digest: $CURRENT_DIGEST"
+          else
+            echo "❌ Failed to pull base image"
+            exit 1
+          fi
+          
+          # Force pull latest to get most recent digest
+          docker pull "$BASE_IMAGE" > /dev/null 2>&1 || true
+          LATEST_DIGEST=$(docker inspect "$BASE_IMAGE" --format='{{index .RepoDigests 0}}' | cut -d'@' -f2)
+          echo "📋 Latest digest: $LATEST_DIGEST"
+          
+          # Compare digests
+          if [ "$CURRENT_DIGEST" != "$LATEST_DIGEST" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force_update }}" = "true" ]; then
+            echo "✅ Base image update available!"
+            echo "update_available=true" >> $GITHUB_OUTPUT
+            echo "🔄 Current: $CURRENT_DIGEST"
+            echo "🔄 Latest:  $LATEST_DIGEST"
+          else
+            echo "ℹ️ Base image is up to date"
+            echo "update_available=false" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "current_digest=$CURRENT_DIGEST" >> $GITHUB_OUTPUT
+          echo "latest_digest=$LATEST_DIGEST" >> $GITHUB_OUTPUT
+          echo "base_image=$BASE_IMAGE" >> $GITHUB_OUTPUT
+
+  # Trigger rebuild if update is available
+  trigger-rebuild:
+    name: Trigger Container Rebuild
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: check-base-image
+    if: needs.check-base-image.outputs.update_available == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger DevContainer rebuild
+        run: |
+          echo "🔄 Triggering DevContainer rebuild due to base image update"
+          echo "📦 Base image: ${{ needs.check-base-image.outputs.base_image }}"
+          echo "📋 Old digest: ${{ needs.check-base-image.outputs.current_digest }}"
+          echo "📋 New digest: ${{ needs.check-base-image.outputs.latest_digest }}"
+          
+          # Trigger the build workflow with force rebuild
+          gh workflow run build-devcontainer.yml \
+            --ref ${{ github.ref_name }} \
+            -f force_rebuild=true \
+            --field "trigger_reason=Base image update: ${{ needs.check-base-image.outputs.base_image }}"
+
+      - name: Wait for rebuild completion
+        run: |
+          echo "⏳ Waiting for DevContainer rebuild to complete..."
+          
+          # Wait up to 20 minutes for the build to complete
+          TIMEOUT=1200
+          ELAPSED=0
+          
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            # Check if build workflow is running
+            RUN_STATUS=$(gh run list --workflow="build-devcontainer.yml" --limit 1 --json status -q '.[0].status' 2>/dev/null || echo "completed")
+            
+            if [ "$RUN_STATUS" = "completed" ]; then
+              echo "✅ DevContainer rebuild completed"
+              break
+            elif [ "$RUN_STATUS" = "failure" ] || [ "$RUN_STATUS" = "failed" ]; then
+              echo "❌ DevContainer rebuild failed"
+              exit 1
+            else
+              echo "⏳ Build still running... ($ELAPSED/$TIMEOUT seconds)"
+              sleep 30
+              ELAPSED=$((ELAPSED + 30))
+            fi
+          done
+          
+          if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo "⏰ Timeout waiting for DevContainer rebuild"
+            exit 1
+          fi
+
+      - name: Verify new image
+        run: |
+          echo "🔍 Verifying new DevContainer image..."
+          
+          # Pull the latest image
+          if docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest; then
+            echo "✅ Successfully pulled updated DevContainer image"
+            
+            # Get image info
+            IMAGE_INFO=$(docker inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest --format='{{.Created}} {{.Size}}')
+            echo "📊 Image created: $IMAGE_INFO"
+          else
+            echo "❌ Failed to pull updated DevContainer image"
+            exit 1
+          fi
+
+  # Send notification
+  notify:
+    name: Send Update Notification
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [check-base-image, trigger-rebuild]
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate update report
+        run: |
+          cat > base-image-update-report.json << EOF
+          {
+            "timestamp": "$(date -Iseconds)",
+            "workflow_run": "${{ github.run_id }}",
+            "base_image": "${{ needs.check-base-image.outputs.base_image }}",
+            "update_available": ${{ needs.check-base-image.outputs.update_available }},
+            "current_digest": "${{ needs.check-base-image.outputs.current_digest }}",
+            "latest_digest": "${{ needs.check-base-image.outputs.latest_digest }}",
+            "rebuild_triggered": ${{ needs.trigger-rebuild.result == 'success' }},
+            "check_success": ${{ needs.check-base-image.result == 'success' }},
+            "overall_success": ${{ success() }}
+          }
+          EOF
+
+      - name: Upload update report
+        uses: actions/upload-artifact@v4
+        with:
+          name: base-image-update-report
+          path: base-image-update-report.json
+          retention-days: 90
+
+      - name: Send notification
+        run: |
+          if [ "${{ needs.check-base-image.outputs.update_available }}" = "true" ]; then
+            if [ "${{ needs.trigger-rebuild.result }}" = "success" ]; then
+              echo "✅ Base image update completed successfully"
+              echo "🔄 DevContainer rebuilt with latest base image"
+              echo "📦 Base image: ${{ needs.check-base-image.outputs.base_image }}"
+            else
+              echo "⚠️ Base image update detected but rebuild failed"
+              echo "📦 Base image: ${{ needs.check-base-image.outputs.base_image }}"
+            fi
+          else
+            echo "ℹ️ No base image updates available"
+            echo "📦 Base image: ${{ needs.check-base-image.outputs.base_image }}"
+          fi

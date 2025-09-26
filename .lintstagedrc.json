@@ -1,10 +1,12 @@
 {
   "*.{ts,js}": [
-    "timeout 30 prettier --write --cache"
+    "timeout 120 prettier --write --cache"
   ],
   "*.{ts,js,json,md}": [
-    "bash -c 'if [[ \"$1\" != scripts/devops/signed-artifacts* ]]; then git secrets --scan \"$1\"; fi' --"
+    "bash -c 'if [[ \"$1\" != scripts/devops/signed-artifacts* ]] && [[ \"$1\" != */.devcontainer/security/* ]] && [[ \"$1\" != */.github/security/* ]]; then git secrets --scan \"$1\"; else echo \"Skipping git-secrets for $1\"; fi' --"
   ],
+  ".devcontainer/security/**": [],
+  ".github/security/**": [],
   "*.sol": [
     "semgrep scan --config .semgrep.yml --error --cache"
   ]

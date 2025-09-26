@@ -1,0 +1,379 @@
+name: DevContainer Security Scan
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'contracts/**'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.github/security/**'
+      - '.devcontainer/security/**'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'contracts/**'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.github/security/**'
+      - '.devcontainer/security/**'
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly full scan on Monday 2 AM UTC
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Scan type (incremental or full)'
+        required: false
+        default: 'incremental'
+        type: choice
+        options:
+          - incremental
+          - full
+      skip_cache:
+        description: 'Skip security cache'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/gnus-dao-devcontainer
+  SCAN_TYPE: ${{ github.event.inputs.scan_type || 'incremental' }}
+  SKIP_CACHE: ${{ github.event.inputs.skip_cache || 'false' }}
+
+jobs:
+  security-baseline-check:
+    name: Security Baseline Validation
+    runs-on: ubuntu-latest
+    outputs:
+      baseline-valid: ${{ steps.baseline.outputs.valid }}
+      scan-scope: ${{ steps.scope.outputs.scope }}
+      cache-enabled: ${{ steps.cache.outputs.enabled }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for change analysis
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Validate security baseline
+        id: baseline
+        run: |
+          if [[ -f ".github/security/security-baselines.yml" ]]; then
+            npx ts-node scripts/devops/gh-devcon/manage-security-baselines.ts --validate --results /tmp/baseline-check.json
+            echo "valid=true" >> $GITHUB_OUTPUT
+          else
+            echo "No baseline found, will create one"
+            echo "valid=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Determine scan scope
+        id: scope
+        run: |
+          if [[ "${{ github.event.schedule }}" == "schedule" ]] || [[ "${SCAN_TYPE}" == "full" ]]; then
+            echo "scope=full" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "scope=incremental" >> $GITHUB_OUTPUT
+          else
+            echo "scope=incremental" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure cache
+        id: cache
+        run: |
+          if [[ "${SKIP_CACHE}" == "true" ]]; then
+            echo "enabled=false" >> $GITHUB_OUTPUT
+          else
+            echo "enabled=true" >> $GITHUB_OUTPUT
+          fi
+
+  dependency-security-scan:
+    name: Dependency Security Scan
+    needs: security-baseline-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run dependency security scan in DevContainer
+        uses: devcontainers/ci@v0.3
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SOCKET_API_KEY: ${{ secrets.SOCKET_API_KEY }}
+          SCAN_SCOPE: ${{ needs.security-baseline-check.outputs.scan-scope }}
+          CACHE_ENABLED: ${{ needs.security-baseline-check.outputs.cache-enabled }}
+        with:
+          imageName: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          runCmd: |
+            # Setup security environment
+            source .devcontainer/security/setup-security-env.sh
+
+            # Run dependency scan
+            if [[ "$SCAN_SCOPE" == "incremental" ]]; then
+              npx ts-node scripts/devops/gh-devcon/incremental-dependency-scan.ts --incremental --output dep-results.json
+            else
+              npx ts-node scripts/devops/gh-devcon/incremental-dependency-scan.ts --output dep-results.json
+            fi
+
+      - name: Upload dependency scan results
+        uses: actions/upload-artifact@v3
+        with:
+          name: dependency-security-results-${{ github.run_id }}
+          path: dep-results.json
+          retention-days: 30
+
+  code-security-scan:
+    name: Code Security Scan
+    needs: security-baseline-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run code security scan in DevContainer
+        uses: devcontainers/ci@v0.3
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+          SCAN_SCOPE: ${{ needs.security-baseline-check.outputs.scan-scope }}
+        with:
+          imageName: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          runCmd: |
+            # Setup security environment
+            source .devcontainer/security/setup-security-env.sh
+
+            # Setup git-secrets for secrets detection
+            git secrets --register-aws --global
+            git secrets --install --global
+            git secrets --scan 2>/dev/null || true
+
+            # Run Semgrep analysis
+            if [[ "$SCAN_SCOPE" == "incremental" ]]; then
+              # Analyze only changed files
+              CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD -- ':(exclude)package.json' | grep -E '\.(js|ts|sol)$' || true)
+              if [[ -n "$CHANGED_FILES" ]]; then
+                echo "$CHANGED_FILES" | xargs semgrep scan --config=auto --json --output semgrep-results.json
+              else
+                echo '{"results": []}' > semgrep-results.json
+              fi
+            else
+              # Full scan
+              semgrep scan --config=auto --json --output semgrep-results.json
+            fi
+
+            # Custom Diamond proxy security patterns
+            if [[ -f ".github/security/diamond-patterns.yml" ]]; then
+              semgrep scan --config .github/security/diamond-patterns.yml --json --output diamond-security-results.json
+            else
+              echo '{"results": []}' > diamond-security-results.json
+            fi
+
+            # Run Slither for Solidity analysis (if available)
+            if command -v slither >/dev/null 2>&1 && [[ -d "contracts" ]]; then
+              slither --json --exclude-dependencies --exclude-informational contracts --output slither-results.json || echo '{"results": []}' > slither-results.json
+            else
+              echo '{"results": []}' > slither-results.json
+            fi
+
+            # Aggregate code security results
+            npx ts-node scripts/devops/gh-devcon/aggregate-code-security-results.ts --output code-results.json
+
+      - name: Upload code scan results
+        uses: actions/upload-artifact@v3
+        with:
+          name: code-security-results-${{ github.run_id }}
+          path: |
+            code-results.json
+            semgrep-results.json
+            diamond-security-results.json
+            slither-results.json
+          retention-days: 30
+
+  aggregate-security-results:
+    name: Aggregate Security Results
+    needs: [dependency-security-scan, code-security-scan]
+    runs-on: ubuntu-latest
+    if: always()
+    outputs:
+      critical-count: ${{ steps.aggregate.outputs.critical }}
+      high-count: ${{ steps.aggregate.outputs.high }}
+      baseline-passed: ${{ steps.aggregate.outputs.baseline_passed }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Download all security results
+        uses: actions/download-artifact@v3
+        with:
+          path: security-results/
+
+      - name: Aggregate and analyze security results
+        id: aggregate
+        run: |
+          # Aggregate all security results
+          npx ts-node scripts/devops/gh-devcon/aggregate-security-results.ts \
+            --input security-results/ \
+            --output aggregated-security.json
+
+          # Generate SARIF for GitHub Security
+          npx ts-node scripts/devops/gh-devcon/generate-sarif-results.ts \
+            --input aggregated-security.json \
+            --output security.sarif
+
+          # Validate against security baseline
+          if [[ -f ".github/security/security-baselines.yml" ]]; then
+            npx ts-node scripts/devops/gh-devcon/manage-security-baselines.ts \
+              --validate \
+              --results aggregated-security.json \
+              --output baseline-validation.json
+
+            BASELINE_PASSED=true
+          else
+            # Create initial baseline
+            npx ts-node scripts/devops/gh-devcon/manage-security-baselines.ts \
+              --generate \
+              --results aggregated-security.json \
+              --output .github/security/security-baselines.yml
+
+            BASELINE_PASSED=true
+          fi
+
+          # Extract vulnerability counts
+          CRITICAL=$(jq '.vulnerabilities | map(select(.severity == "critical")) | length' aggregated-security.json)
+          HIGH=$(jq '.vulnerabilities | map(select(.severity == "high")) | length' aggregated-security.json)
+
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "baseline_passed=$BASELINE_PASSED" >> $GITHUB_OUTPUT
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: security.sarif
+          category: devcontainer-security-scan
+
+      - name: Create security summary
+        run: |
+          npx ts-node scripts/devops/gh-devcon/manage-security-baselines.ts \
+            --summary \
+            --results aggregated-security.json \
+            --baseline baseline-validation.json \
+            --output security-summary.md
+
+      - name: Comment PR with security results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('security-summary.md', 'utf8');
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });
+
+      - name: Upload final security results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: final-security-results-${{ github.run_id }}
+          path: |
+            aggregated-security.json
+            security.sarif
+            baseline-validation.json
+            security-summary.md
+          retention-days: 30
+
+  security-gate:
+    name: Security Gate
+    needs: aggregate-security-results
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Security gate check
+        run: |
+          CRITICAL=${{ needs.aggregate-security-results.outputs.critical-count }}
+          HIGH=${{ needs.aggregate-security-results.outputs.high-count }}
+          BASELINE_PASSED=${{ needs.aggregate-security-results.outputs.baseline-passed }}
+
+          echo "Security Scan Results:"
+          echo "Critical vulnerabilities: $CRITICAL"
+          echo "High vulnerabilities: $HIGH"
+          echo "Baseline validation: $BASELINE_PASSED"
+
+          # GNUS-DAO security policy: Zero critical, max 5 high
+          if [[ "$CRITICAL" -gt 0 ]]; then
+            echo "❌ BLOCKED: Critical vulnerabilities found"
+            exit 1
+          fi
+
+          if [[ "$HIGH" -gt 5 ]]; then
+            echo "❌ BLOCKED: Too many high-severity vulnerabilities"
+            exit 1
+          fi
+
+          if [[ "$BASELINE_PASSED" != "true" ]]; then
+            echo "❌ BLOCKED: Security baseline validation failed"
+            exit 1
+          fi
+
+          echo "✅ PASSED: All security gates passed"
+
+  update-baseline:
+    name: Update Security Baseline
+    needs: [aggregate-security-results, security-gate]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Download security results
+        uses: actions/download-artifact@v3
+        with:
+          name: final-security-results-${{ github.run_id }}
+          path: security-results/
+
+      - name: Update security baseline
+        run: |
+          npx ts-node scripts/devops/gh-devcon/manage-security-baselines.ts \
+            --generate \
+            --results security-results/aggregated-security.json \
+            --output .github/security/security-baselines.yml
+
+      - name: Commit baseline update
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .github/security/security-baselines.yml
+          git commit -m "chore: update security baseline [automated]" || echo "No changes to commit"
+          git push

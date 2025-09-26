@@ -201,7 +201,7 @@ jobs:
         run: yarn install --frozen-lockfile --prefer-offline
 
       - name: Validate multi-chain setup
-        run: node scripts/run-multi-chain-tests.js validate
+        run: node scripts/run-multi-chain-tests.ts validate
 
       - name: Run multi-chain tests in DevContainer
         uses: devcontainers/ci@v0.3
@@ -264,8 +264,8 @@ jobs:
 
       - name: Aggregate test results and coverage
         run: |
-          node scripts/aggregate-test-results.js --input test-results/ --output aggregated-results.json
-          node scripts/generate-test-report.js --input test-results/ --output coverage/
+          npx ts-node scripts/aggregate-test-results.ts --input test-results/ --output aggregated-results.json
+          npx ts-node scripts/generate-test-report.ts --input test-results/ --output coverage/
 
       - name: Upload aggregated results
         uses: actions/upload-artifact@v4
