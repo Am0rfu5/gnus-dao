@@ -1,0 +1,155 @@
+name: Test Reproducibility
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 4 * * *'  # Daily reproducibility test
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: 'Number of reproducibility test iterations'
+        required: false
+        default: '3'
+        type: string
+      test_docker:
+        description: 'Test Docker compatibility'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/gnus-dao-devcontainer
+
+jobs:
+  test-reproducibility:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'yarn'
+
+    - name: Install dependencies
+      run: yarn install --frozen-lockfile
+
+    - name: Test reproducibility
+      run: |
+        ITERATIONS="${{ github.event.inputs.iterations || '3' }}"
+        DOCKER_FLAG=""
+        if [[ "${{ github.event.inputs.test_docker }}" == "true" ]]; then
+          DOCKER_FLAG="--docker-versions"
+        fi
+
+        npx ts-node scripts/devops/gh-devcon/test-reproducibility.ts \
+          --iterations $ITERATIONS \
+          --output reproducibility-results.json \
+          $DOCKER_FLAG
+
+    - name: Validate artifact consistency
+      run: |
+        npx ts-node scripts/devops/gh-devcon/validate-artifact-consistency.ts \
+          --output artifact-consistency-results.json
+
+    - name: Generate reproducibility report
+      run: |
+        # Generate comprehensive report
+        npx ts-node scripts/devops/gh-devcon/generate-reproducibility-report.ts \
+          --input reproducibility-results.json \
+          --artifacts artifact-consistency-results.json \
+          --output reproducibility-report.md
+
+    - name: Check reproducibility thresholds
+      id: check
+      run: |
+        # Parse results and check thresholds
+        REPRODUCIBLE=$(jq -r '.overall_reproducible' reproducibility-results.json)
+        CONSISTENCY=$(jq -r '.reproducibility_percentage' reproducibility-results.json)
+
+        echo "reproducible=$REPRODUCIBLE" >> $GITHUB_OUTPUT
+        echo "consistency_percentage=$CONSISTENCY" >> $GITHUB_OUTPUT
+
+        # Check if results meet minimum thresholds
+        if [[ "$REPRODUCIBLE" == "true" ]] && [[ $(echo "$CONSISTENCY >= 80.0" | bc -l) -eq 1 ]]; then
+          echo "thresholds_met=true" >> $GITHUB_OUTPUT
+        else
+          echo "thresholds_met=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Comment PR with reproducibility results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('reproducibility-report.md', 'utf8');
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `## 🔄 Reproducibility Test Results\n\n${report}`
+          });
+
+    - name: Create reproducibility summary
+      run: |
+        echo "## 🔄 Reproducibility Test Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Status**: ${{ steps.check.outputs.reproducible == 'true' && '✅ REPRODUCIBLE' || '❌ NOT REPRODUCIBLE' }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Consistency**: ${{ steps.check.outputs.consistency_percentage }}%" >> $GITHUB_STEP_SUMMARY
+        echo "**Iterations**: ${{ github.event.inputs.iterations || '3' }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "[View Detailed Report](reproducibility-report.md)" >> $GITHUB_STEP_SUMMARY
+
+    - name: Upload reproducibility results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: reproducibility-test-results
+        path: |
+          reproducibility-results.json
+          artifact-consistency-results.json
+          reproducibility-report.md
+
+    - name: Fail workflow if reproducibility fails
+      if: steps.check.outputs.thresholds_met != 'true'
+      run: |
+        echo "❌ Reproducibility test failed!"
+        echo "Reproducible: ${{ steps.check.outputs.reproducible }}"
+        echo "Consistency: ${{ steps.check.outputs.consistency_percentage }}% (required: 80%)"
+        exit 1
+
+  test-cross-platform-reproducibility:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+      fail-fast: false
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'yarn'
+
+    - name: Install dependencies
+      run: yarn install --frozen-lockfile
+
+    - name: Test cross-platform reproducibility
+      run: |
+        npx ts-node scripts/devops/gh-devcon/test-reproducibility.ts \
+          --iterations 2 \
+          --output ${{ matrix.os }}-reproducibility.json
+
+    - name: Upload cross-platform results
+      uses: actions/upload-artifact@v3
+      with:
+        name: cross-platform-reproducibility-${{ matrix.os }}
+        path: ${{ matrix.os }}-reproducibility.json
