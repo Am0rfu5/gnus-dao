@@ -1,0 +1,271 @@
+name: Environment Fingerprint
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'scripts/devops/gh-devcon/**'
+      - '.devcontainer/**'
+      - 'package.json'
+      - 'hardhat.config.ts'
+      - 'tsconfig.json'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'scripts/devops/gh-devcon/**'
+      - '.devcontainer/**'
+      - 'package.json'
+      - 'hardhat.config.ts'
+      - 'tsconfig.json'
+
+jobs:
+  fingerprint-environment:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/devcontainers/typescript-node:18
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build TypeScript
+        run: yarn tsc
+
+      - name: Install Docker CLI
+        run: |
+          apt-get update
+          apt-get install -y docker.io
+
+      - name: Generate environment fingerprint
+        run: |
+          node scripts/devops/gh-devcon/fingerprint-environment.ts \
+            --output ci-fingerprint.json \
+            --verbose
+
+      - name: Upload fingerprint artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-fingerprint-ci
+          path: ci-fingerprint.json
+          retention-days: 30
+
+      - name: Display fingerprint summary
+        run: |
+          echo "## Environment Fingerprint Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Category | Status | Details |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+
+          # Parse and display key metrics from fingerprint
+          if [ -f ci-fingerprint.json ]; then
+            node -e "
+              const fp = require('./ci-fingerprint.json');
+              console.log('| System | ✅ | ' + fp.system.platform + ' ' + fp.system.arch + ' |');
+              console.log('| Node.js | ✅ | ' + fp.runtime.node_version + ' |');
+              console.log('| Yarn | ✅ | ' + fp.runtime.yarn_version + ' |');
+              console.log('| Tools | ✅ | ' + Object.keys(fp.tools).length + ' tools detected |');
+              console.log('| Security | ✅ | ' + Object.keys(fp.security_tools).length + ' security tools |');
+            "
+          fi
+
+  validate-environment-parity:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/devcontainers/typescript-node:18
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build TypeScript
+        run: yarn tsc
+
+      - name: Install Docker CLI
+        run: |
+          apt-get update
+          apt-get install -y docker.io
+
+      - name: Generate current environment fingerprint
+        run: |
+          node scripts/devops/gh-devcon/fingerprint-environment.ts \
+            --output current-fingerprint.json \
+            --verbose
+
+      - name: Download baseline fingerprint
+        uses: actions/download-artifact@v4
+        with:
+          name: environment-fingerprint-baseline
+          path: .
+        continue-on-error: true
+
+      - name: Compare with baseline
+        run: |
+          if [ -f baseline-fingerprint.json ]; then
+            echo "Comparing with existing baseline..."
+            node scripts/devops/gh-devcon/compare-environments.ts \
+              baseline-fingerprint.json \
+              current-fingerprint.json \
+              --output parity-report.json \
+              --format markdown \
+              --verbose
+          else
+            echo "No baseline found - creating initial baseline..."
+            cp current-fingerprint.json baseline-fingerprint.json
+            echo '{"match_percentage": 100, "differences": [], "warnings": [], "critical_differences": []}' > parity-report.json
+          fi
+
+      - name: Upload updated baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-fingerprint-baseline
+          path: baseline-fingerprint.json
+          retention-days: 90
+
+      - name: Upload parity report
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-parity-report
+          path: parity-report.json
+          retention-days: 30
+
+      - name: Check for critical differences
+        run: |
+          CRITICAL_COUNT=$(node -e "console.log(require('./parity-report.json').critical_differences.length)")
+          if [ "$CRITICAL_COUNT" -gt 0 ]; then
+            echo "❌ Critical environment differences detected: $CRITICAL_COUNT"
+            echo "## 🚨 Critical Environment Differences" >> $GITHUB_STEP_SUMMARY
+            node -e "
+              const report = require('./parity-report.json');
+              report.critical_differences.forEach(diff => {
+                console.log('### ' + diff.category.toUpperCase());
+                console.log(diff.message);
+                console.log('');
+              });
+            " >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "✅ No critical environment differences detected"
+          fi
+
+      - name: Generate parity summary
+        run: |
+          echo "## Environment Parity Validation" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          node -e "
+            const report = require('./parity-report.json');
+            const matchPercent = report.match_percentage || 100;
+            const criticalCount = report.critical_differences?.length || 0;
+            const warningCount = report.warnings?.length || 0;
+
+            console.log('| Match Percentage | ' + matchPercent + '% | ' + (matchPercent >= 95 ? '✅' : '⚠️') + ' |');
+            console.log('| Critical Issues | ' + criticalCount + ' | ' + (criticalCount === 0 ? '✅' : '❌') + ' |');
+            console.log('| Warnings | ' + warningCount + ' | ' + (warningCount === 0 ? '✅' : '⚠️') + ' |');
+          " >> $GITHUB_STEP_SUMMARY
+
+  detect-environment-drift:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/devcontainers/typescript-node:18
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build TypeScript
+        run: yarn tsc
+
+      - name: Install Docker CLI
+        run: |
+          apt-get update
+          apt-get install -y docker.io
+
+      - name: Download baseline fingerprint
+        uses: actions/download-artifact@v4
+        with:
+          name: environment-fingerprint-baseline
+          path: .
+        continue-on-error: true
+
+      - name: Detect environment drift
+        run: |
+          if [ -f baseline-fingerprint.json ]; then
+            node scripts/devops/gh-devcon/detect-environment-drift.ts \
+              --baseline baseline-fingerprint.json \
+              --output drift-analysis.json \
+              --report
+          else
+            echo "No baseline available for drift detection"
+            echo '{"drift_detected": false, "drift_level": "none"}' > drift-analysis.json
+          fi
+
+      - name: Upload drift analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-drift-analysis
+          path: drift-analysis.json
+          retention-days: 30
+
+      - name: Check drift level
+        run: |
+          DRIFT_LEVEL=$(node -e "console.log(require('./drift-analysis.json').drift_level)")
+          echo "Drift level: $DRIFT_LEVEL"
+
+          if [ "$DRIFT_LEVEL" = "critical" ] || [ "$DRIFT_LEVEL" = "high" ]; then
+            echo "🚨 High-priority drift detected: $DRIFT_LEVEL"
+            echo "## 🚨 Environment Drift Alert" >> $GITHUB_STEP_SUMMARY
+            node -e "
+              const analysis = require('./drift-analysis.json');
+              console.log('**Drift Level:** ' + analysis.drift_level.toUpperCase());
+              console.log('**Changes:** ' + analysis.changes_since_baseline);
+              console.log('**Critical Changes:** ' + analysis.critical_changes);
+              console.log('');
+              console.log('### Recommendations');
+              analysis.recommendations.forEach(rec => console.log('- ' + rec));
+            " >> $GITHUB_STEP_SUMMARY
+            exit 1
+          elif [ "$DRIFT_LEVEL" = "medium" ]; then
+            echo "⚠️  Medium-priority drift detected: $DRIFT_LEVEL"
+            echo "## ⚠️ Environment Drift Warning" >> $GITHUB_STEP_SUMMARY
+            node -e "
+              const analysis = require('./drift-analysis.json');
+              console.log('**Drift Level:** ' + analysis.drift_level.toUpperCase());
+              console.log('**Changes:** ' + analysis.changes_since_baseline);
+            " >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Environment is stable: $DRIFT_LEVEL"
+          fi

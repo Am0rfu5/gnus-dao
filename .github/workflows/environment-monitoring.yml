@@ -1,0 +1,202 @@
+name: Environment Monitoring
+
+on:
+  schedule:
+    # Run every 4 hours
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+    inputs:
+      force_check:
+        description: 'Force immediate environment check'
+        required: false
+        type: boolean
+        default: false
+      update_baseline:
+        description: 'Update environment baseline'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  monitor-environment:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/devcontainers/typescript-node:18
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build TypeScript
+        run: yarn tsc
+
+      - name: Install Docker CLI
+        run: |
+          apt-get update
+          apt-get install -y docker.io
+
+      - name: Download baseline fingerprint
+        uses: actions/download-artifact@v4
+        with:
+          name: environment-fingerprint-baseline
+          path: .
+        continue-on-error: true
+
+      - name: Force check (if requested)
+        if: github.event.inputs.force_check == 'true'
+        run: |
+          echo "🔍 Performing forced environment check..."
+          node scripts/devops/gh-devcon/detect-environment-drift.ts \
+            --baseline baseline-fingerprint.json \
+            --output forced-drift-analysis.json \
+            --report
+
+      - name: Update baseline (if requested)
+        if: github.event.inputs.update_baseline == 'true'
+        run: |
+          echo "📋 Updating environment baseline..."
+          node scripts/devops/gh-devcon/fingerprint-environment.ts \
+            --output new-baseline.json \
+            --verbose
+
+          # Upload new baseline
+          cp new-baseline.json baseline-fingerprint.json
+
+      - name: Run scheduled environment check
+        if: github.event.schedule != ''
+        run: |
+          echo "🔍 Running scheduled environment check..."
+          node scripts/devops/gh-devcon/detect-environment-drift.ts \
+            --baseline baseline-fingerprint.json \
+            --output scheduled-drift-analysis.json \
+            --report
+
+      - name: Determine analysis file
+        run: |
+          if [ -f forced-drift-analysis.json ]; then
+            ANALYSIS_FILE="forced-drift-analysis.json"
+          elif [ -f scheduled-drift-analysis.json ]; then
+            ANALYSIS_FILE="scheduled-drift-analysis.json"
+          else
+            echo "No analysis file found"
+            exit 1
+          fi
+          echo "ANALYSIS_FILE=$ANALYSIS_FILE" >> $GITHUB_ENV
+
+      - name: Check for alerts
+        run: |
+          DRIFT_LEVEL=$(node -e "console.log(require('./$ANALYSIS_FILE').drift_level)")
+          ALERT_REQUIRED=$(node -e "console.log(require('./$ANALYSIS_FILE').alert_required)")
+
+          echo "Drift level: $DRIFT_LEVEL"
+          echo "Alert required: $ALERT_REQUIRED"
+
+          echo "DRIFT_LEVEL=$DRIFT_LEVEL" >> $GITHUB_ENV
+          echo "ALERT_REQUIRED=$ALERT_REQUIRED" >> $GITHUB_ENV
+
+      - name: Send alerts (if required)
+        if: env.ALERT_REQUIRED == 'true'
+        run: |
+          echo "🚨 Sending environment drift alerts..."
+
+          # Send Slack alert (if webhook configured)
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            node scripts/devops/gh-devcon/alert-environment-drift.ts \
+              --analysis $ANALYSIS_FILE \
+              --config alert-config.json
+          fi
+
+          # Create GitHub issue for critical alerts
+          if [ "$DRIFT_LEVEL" = "critical" ]; then
+            gh issue create \
+              --title "🚨 Critical Environment Drift Detected" \
+              --body "Environment monitoring has detected critical drift. Check the monitoring dashboard for details." \
+              --label "environment-drift,critical"
+          fi
+
+      - name: Upload monitoring results
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-monitoring-results
+          path: |
+            *-drift-analysis.json
+            *-fingerprint.json
+          retention-days: 30
+
+      - name: Update monitoring dashboard
+        run: |
+          echo "## Environment Monitoring Dashboard" >> monitoring-dashboard.md
+          echo "" >> monitoring-dashboard.md
+          echo "### Last Check: $(date -u)" >> monitoring-dashboard.md
+          echo "" >> monitoring-dashboard.md
+
+          node -e "
+            const analysis = require('./$ANALYSIS_FILE');
+            console.log('**Drift Level:** ' + analysis.drift_level.toUpperCase());
+            console.log('**Changes Since Baseline:** ' + analysis.changes_since_baseline);
+            console.log('**Critical Changes:** ' + analysis.critical_changes);
+            console.log('**Warning Changes:** ' + analysis.warning_changes);
+            console.log('**Alert Required:** ' + (analysis.alert_required ? 'Yes' : 'No'));
+            console.log('');
+            console.log('### Recommendations');
+            analysis.recommendations.forEach(rec => console.log('- ' + rec));
+          " >> monitoring-dashboard.md
+
+      - name: Upload dashboard
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-monitoring-dashboard
+          path: monitoring-dashboard.md
+          retention-days: 7
+
+      - name: Update baseline (if no critical drift)
+        if: env.DRIFT_LEVEL != 'critical'
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-fingerprint-baseline
+          path: baseline-fingerprint.json
+          retention-days: 90
+
+      - name: Fail on critical drift
+        if: env.DRIFT_LEVEL == 'critical'
+        run: |
+          echo "❌ Critical environment drift detected - failing workflow"
+          exit 1
+
+  cleanup-old-artifacts:
+    runs-on: ubuntu-latest
+    if: github.event.schedule != ''
+    steps:
+      - name: Delete old artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const artifacts = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - 30); // Keep artifacts for 30 days
+
+            for (const artifact of artifacts.data.artifacts) {
+              if (artifact.name.startsWith('environment-') && new Date(artifact.created_at) < cutoffDate) {
+                console.log(`Deleting old artifact: ${artifact.name}`);
+                await github.rest.actions.deleteArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: artifact.id,
+                });
+              }
+            }

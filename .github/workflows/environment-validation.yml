@@ -1,0 +1,279 @@
+name: Environment Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'scripts/devops/gh-devcon/**'
+      - 'package.json'
+      - 'hardhat.config.ts'
+      - 'tsconfig.json'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'scripts/devops/gh-devcon/**'
+      - 'package.json'
+      - 'hardhat.config.ts'
+      - 'tsconfig.json'
+      - '.github/workflows/**'
+
+jobs:
+  validate-tools:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/devcontainers/typescript-node:18
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build TypeScript
+        run: yarn tsc
+
+      - name: Install Docker CLI
+        run: |
+          apt-get update
+          apt-get install -y docker.io
+
+      - name: Validate tool versions
+        run: |
+          node dist/scripts/devops/gh-devcon/validate-tool-versions.ts \
+            --output tool-validation-report.json \
+            --report tool-validation-report.md
+
+      - name: Upload tool validation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: tool-validation-report
+          path: |
+            tool-validation-report.json
+            tool-validation-report.md
+          retention-days: 30
+
+      - name: Check tool compatibility
+        run: |
+          COMPATIBLE=$(node -e "console.log(require('./tool-validation-report.json').compatible_tools)")
+          TOTAL=$(node -e "console.log(require('./tool-validation-report.json').tools_validated)")
+          MISSING=$(node -e "console.log(require('./tool-validation-report.json').missing_tools)")
+
+          echo "Tools compatible: $COMPATIBLE/$TOTAL"
+          echo "Missing tools: $MISSING"
+
+          if [ "$MISSING" -gt 0 ]; then
+            echo "⚠️  Some tools are missing - check report for details"
+          fi
+
+          # Allow some missing tools for CI (like security scanners that might not be installed)
+          if [ "$COMPATIBLE" -lt 10 ]; then
+            echo "❌ Too many incompatible tools: $COMPATIBLE/$TOTAL"
+            exit 1
+          fi
+
+  validate-configurations:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/devcontainers/typescript-node:18
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build TypeScript
+        run: yarn tsc
+
+      - name: Validate configurations
+        run: |
+          node dist/scripts/devops/gh-devcon/validate-configurations.ts \
+            --output config-validation-report.json \
+            --report config-validation-report.md
+
+      - name: Upload configuration validation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: config-validation-report
+          path: |
+            config-validation-report.json
+            config-validation-report.md
+          retention-days: 30
+
+      - name: Check configuration validity
+        run: |
+          VALID=$(node -e "console.log(require('./config-validation-report.json').valid_files)")
+          TOTAL=$(node -e "console.log(require('./config-validation-report.json').files_checked)")
+          ERRORS=$(node -e "console.log(require('./config-validation-report.json').total_errors)")
+
+          echo "Configuration files valid: $VALID/$TOTAL"
+          echo "Total errors: $ERRORS"
+
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "## ❌ Configuration Validation Failed" >> $GITHUB_STEP_SUMMARY
+            node -e "
+              const report = require('./config-validation-report.json');
+              report.critical_issues.forEach(issue => console.log('- ' + issue));
+            " >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+  benchmark-performance:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/devcontainers/typescript-node:18
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build TypeScript
+        run: yarn tsc
+
+      - name: Install Docker CLI
+        run: |
+          apt-get update
+          apt-get install -y docker.io
+
+      - name: Run performance benchmark
+        run: |
+          node dist/scripts/devops/gh-devcon/benchmark-environment-performance.ts \
+            --output performance-benchmark-report.json \
+            --report performance-benchmark-report.md
+
+      - name: Upload performance benchmark report
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-benchmark-report
+          path: |
+            performance-benchmark-report.json
+            performance-benchmark-report.md
+          retention-days: 30
+
+      - name: Check performance score
+        run: |
+          OVERALL_SCORE=$(node -e "console.log(Math.floor(require('./performance-benchmark-report.json').scores.overall_score))")
+          PERFORMANCE_LEVEL=$(node -e "console.log(require('./performance-benchmark-report.json').assessment.performance_level)")
+
+          echo "Overall performance score: $OVERALL_SCORE/100"
+          echo "Performance level: $PERFORMANCE_LEVEL"
+
+          if [ "$PERFORMANCE_LEVEL" = "poor" ]; then
+            echo "## 🚧 Poor Performance Detected" >> $GITHUB_STEP_SUMMARY
+            echo "Overall Score: $OVERALL_SCORE/100" >> $GITHUB_STEP_SUMMARY
+            node -e "
+              const report = require('./performance-benchmark-report.json');
+              console.log('### Bottlenecks:');
+              report.assessment.bottlenecks.forEach(b => console.log('- ' + b));
+              console.log('');
+              console.log('### Recommendations:');
+              report.assessment.recommendations.forEach(r => console.log('- ' + r));
+            " >> $GITHUB_STEP_SUMMARY
+            exit 1
+          elif [ "$OVERALL_SCORE" -lt 60 ]; then
+            echo "## ⚠️  Suboptimal Performance" >> $GITHUB_STEP_SUMMARY
+            echo "Overall Score: $OVERALL_SCORE/100 ($PERFORMANCE_LEVEL)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ✅ Performance Acceptable" >> $GITHUB_STEP_SUMMARY
+            echo "Overall Score: $OVERALL_SCORE/100 ($PERFORMANCE_LEVEL)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  validation-summary:
+    runs-on: ubuntu-latest
+    needs: [validate-tools, validate-configurations, benchmark-performance]
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all validation reports
+        uses: actions/download-artifact@v4
+        with:
+          path: validation-reports
+
+      - name: Generate validation summary
+        run: |
+          echo "## Environment Validation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Tool validation summary
+          if [ -f validation-reports/tool-validation-report/tool-validation-report.json ]; then
+            echo "### 🔧 Tool Validation" >> $GITHUB_STEP_SUMMARY
+            node -e "
+              const report = require('./validation-reports/tool-validation-report/tool-validation-report.json');
+              console.log('- **Status:** ' + (report.overall_compatible ? '✅ Compatible' : '❌ Incompatible'));
+              console.log('- **Tools:** ' + report.compatible_tools + '/' + report.tools_validated + ' compatible');
+              console.log('- **Missing:** ' + report.missing_tools + ' tools');
+            " >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Configuration validation summary
+          if [ -f validation-reports/config-validation-report/config-validation-report.json ]; then
+            echo "### 📋 Configuration Validation" >> $GITHUB_STEP_SUMMARY
+            node -e "
+              const report = require('./validation-reports/config-validation-report/config-validation-report.json');
+              console.log('- **Status:** ' + (report.overall_valid ? '✅ Valid' : '❌ Invalid'));
+              console.log('- **Files:** ' + report.valid_files + '/' + report.files_checked + ' valid');
+              console.log('- **Errors:** ' + report.total_errors + ' total errors');
+            " >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Performance benchmark summary
+          if [ -f validation-reports/performance-benchmark-report/performance-benchmark-report.json ]; then
+            echo "### 🏃 Performance Benchmark" >> $GITHUB_STEP_SUMMARY
+            node -e "
+              const report = require('./validation-reports/performance-benchmark-report/performance-benchmark-report.json');
+              const score = report.scores.overall_score.toFixed(1);
+              const level = report.assessment.performance_level.toUpperCase();
+              console.log('- **Score:** ' + score + '/100 (' + level + ')');
+              console.log('- **CPU:** ' + report.scores.cpu_score.toFixed(1));
+              console.log('- **Memory:** ' + report.scores.memory_score.toFixed(1));
+              console.log('- **Disk:** ' + report.scores.disk_score.toFixed(1));
+            " >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Determine overall status
+        run: |
+          # Check if any jobs failed
+          if [ "${{ needs.validate-tools.result }}" = "failure" ] || \
+             [ "${{ needs.validate-configurations.result }}" = "failure" ] || \
+             [ "${{ needs.benchmark-performance.result }}" = "failure" ]; then
+            echo "❌ Environment validation failed"
+            exit 1
+          else
+            echo "✅ Environment validation passed"
+          fi
