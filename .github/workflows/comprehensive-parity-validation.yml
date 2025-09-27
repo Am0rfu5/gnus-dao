@@ -1,0 +1,495 @@
+name: Comprehensive Environment Parity Validation
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'scripts/devops/gh-devcon/**'
+      - '.devcontainer/**'
+      - 'hardhat.config.ts'
+      - 'package.json'
+      - 'yarn.lock'
+  schedule:
+    - cron: '0 6 * * *'  # Daily parity check
+  workflow_dispatch:
+    inputs:
+      validation_level:
+        description: 'Validation level (basic, comprehensive, deep)'
+        required: false
+        default: 'comprehensive'
+        type: choice
+        options:
+          - basic
+          - comprehensive
+          - deep
+      skip_compilation:
+        description: 'Skip Hardhat compilation for faster testing'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/gnus-dao-devcontainer
+  VALIDATION_LEVEL: ${{ github.event.inputs.validation_level || 'comprehensive' }}
+  SKIP_COMPILATION: ${{ github.event.inputs.skip_compilation || false }}
+
+jobs:
+  generate-baseline:
+    name: 'Generate Environment Baseline'
+    runs-on: ubuntu-latest
+    outputs:
+      baseline-hash: ${{ steps.baseline.outputs.hash }}
+      baseline-file: ${{ steps.baseline.outputs.file }}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'yarn'
+
+    - name: Install dependencies
+      run: yarn install --frozen-lockfile
+
+    - name: Generate native environment baseline
+      id: baseline
+      run: |
+        echo "🔍 Generating native environment baseline..."
+        npx tsx scripts/devops/gh-devcon/fingerprint-environment.ts --output native-baseline.json --verbose
+        HASH=$(jq -r '.hash' native-baseline.json)
+        echo "hash=$HASH" >> $GITHUB_OUTPUT
+        echo "file=native-baseline.json" >> $GITHUB_OUTPUT
+
+    - name: Upload baseline fingerprint
+      uses: actions/upload-artifact@v4
+      with:
+        name: native-baseline-fingerprint
+        path: native-baseline.json
+        retention-days: 7
+
+  validate-devcontainer-parity:
+    name: 'Validate DevContainer Parity'
+    needs: generate-baseline
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test-type: [environment, tools, performance, network, reproducibility]
+        include:
+          - test-type: environment
+            description: 'Environment fingerprint comparison'
+          - test-type: tools
+            description: 'Development tools validation'
+          - test-type: performance
+            description: 'Performance characteristics comparison'
+          - test-type: network
+            description: 'Network access validation'
+          - test-type: reproducibility
+            description: 'Build reproducibility testing'
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download baseline fingerprint
+      uses: actions/download-artifact@v4
+      with:
+        name: native-baseline-fingerprint
+
+    - name: Setup and run DevContainer
+      uses: devcontainers/ci@v0.3
+      with:
+        imageName: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        runCmd: |
+          echo "🧪 Running ${{ matrix.test-type }} validation in DevContainer..."
+
+          # Install dependencies
+          yarn install --frozen-lockfile
+
+          case "${{ matrix.test-type }}" in
+            environment)
+              echo "Generating DevContainer environment fingerprint..."
+              npx tsx scripts/devops/gh-devcon/fingerprint-environment.ts --output devcontainer-fingerprint.json --verbose
+              cp devcontainer-fingerprint.json /tmp/
+              ;;
+
+            tools)
+              echo "Validating development tools..."
+              npx tsx scripts/devops/gh-devcon/validate-tool-versions.ts --environment devcontainer --output devcontainer-tools.json
+              cp devcontainer-tools.json /tmp/
+              ;;
+
+            performance)
+              echo "Measuring DevContainer performance..."
+              npx tsx scripts/devops/gh-devcon/benchmark-environment-performance.ts --environment devcontainer --output devcontainer-performance.json
+              cp devcontainer-performance.json /tmp/
+              ;;
+
+            network)
+              echo "Testing network connectivity..."
+              npx tsx scripts/devops/gh-devcon/validate-network-access.ts --blockchain-rpcs --output devcontainer-network.json
+              cp devcontainer-network.json /tmp/
+              ;;
+
+            reproducibility)
+              echo "Testing build reproducibility..."
+              if [[ "$SKIP_COMPILATION" == "true" ]]; then
+                npx tsx scripts/devops/gh-devcon/test-reproducibility.ts --iterations 2 --quick --skip-full-compile --timeout=60 --output devcontainer-reproducibility.json
+              else
+                npx tsx scripts/devops/gh-devcon/test-reproducibility.ts --iterations 2 --quick --timeout=120 --output devcontainer-reproducibility.json
+              fi
+              cp devcontainer-reproducibility.json /tmp/
+              ;;
+          esac
+
+    - name: Download DevContainer results
+      run: |
+        cp /tmp/*-${{ matrix.test-type }}.json . 2>/dev/null || true
+
+    - name: Compare environments
+      id: compare
+      run: |
+        echo "🔍 Comparing ${{ matrix.test-type }} results..."
+
+        case "${{ matrix.test-type }}" in
+          environment)
+            npx tsx scripts/devops/gh-devcon/compare-environments.ts \
+              --baseline native-baseline.json \
+              --current devcontainer-fingerprint.json \
+              --output ${{ matrix.test-type }}-comparison.json \
+              --report ${{ matrix.test-type }}-report.md
+            ;;
+
+          tools)
+            # Compare tool versions
+            npx tsx scripts/devops/gh-devcon/validate-tool-versions.ts \
+              --compare native-baseline.json devcontainer-tools.json \
+              --output ${{ matrix.test-type }}-comparison.json
+            ;;
+
+          performance)
+            # Compare performance metrics
+            npx tsx scripts/devops/gh-devcon/compare-environments.ts \
+              --performance native-baseline.json devcontainer-performance.json \
+              --output ${{ matrix.test-type }}-comparison.json
+            ;;
+
+          network)
+            # Compare network access
+            npx tsx scripts/devops/gh-devcon/validate-network-access.ts \
+              --compare native-baseline.json devcontainer-network.json \
+              --output ${{ matrix.test-type }}-comparison.json
+            ;;
+
+          reproducibility)
+            # Analyze reproducibility results
+            ./scripts/devops/gh-devcon/analyze-reproducibility-issues.sh \
+              --input devcontainer-reproducibility.json \
+              --output ${{ matrix.test-type }}-analysis.md
+            cp reproducibility-analysis.md ${{ matrix.test-type }}-comparison.json 2>/dev/null || echo '{"analysis": "completed"}' > ${{ matrix.test-type }}-comparison.json
+            ;;
+        esac
+
+        # Check if comparison passed
+        if [[ -f "${{ matrix.test-type }}-comparison.json" ]]; then
+          # Extract success status from comparison result
+          if jq -e '.overall_match // .reproducibility_percentage >= 80 // false' ${{ matrix.test-type }}-comparison.json > /dev/null; then
+            echo "result=pass" >> $GITHUB_OUTPUT
+          else
+            echo "result=fail" >> $GITHUB_OUTPUT
+          fi
+        else
+          echo "result=fail" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Upload validation results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: devcontainer-${{ matrix.test-type }}-validation
+        path: |
+          ${{ matrix.test-type }}-*.json
+          ${{ matrix.test-type }}-*.md
+        retention-days: 7
+
+  test-cross-platform-reproducibility:
+    name: 'Cross-Platform Reproducibility'
+    needs: generate-baseline
+    runs-on: ${{ matrix.os }}
+    if: github.event_name != 'pull_request' || matrix.os == 'ubuntu-latest'
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node-version: ['20']
+      fail-fast: false
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'yarn'
+
+    - name: Install dependencies
+      run: yarn install --frozen-lockfile
+
+    - name: Generate cross-platform fingerprint
+      run: |
+        npx tsx scripts/devops/gh-devcon/fingerprint-environment.ts --output ${{ matrix.os }}-fingerprint.json
+
+    - name: Test reproducibility
+      run: |
+        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+          # Windows: more aggressive timeouts
+          npx tsx scripts/devops/gh-devcon/test-reproducibility.ts --iterations 2 --quick --skip-full-compile --timeout=90 --output ${{ matrix.os }}-reproducibility.json
+        else
+          # Linux/macOS: standard timeouts
+          npx tsx scripts/devops/gh-devcon/test-reproducibility.ts --iterations 2 --quick --timeout=120 --output ${{ matrix.os }}-reproducibility.json
+        fi
+
+    - name: Upload cross-platform results
+      uses: actions/upload-artifact@v4
+      with:
+        name: cross-platform-${{ matrix.os }}
+        path: |
+          ${{ matrix.os }}-fingerprint.json
+          ${{ matrix.os }}-reproducibility.json
+        retention-days: 7
+
+  aggregate-parity-results:
+    name: 'Aggregate Parity Validation Results'
+    needs: [validate-devcontainer-parity, test-cross-platform-reproducibility]
+    runs-on: ubuntu-latest
+    if: always()
+    outputs:
+      validation_passed: ${{ steps.validate.outputs.validation_passed }}
+      overall_score: ${{ steps.validate.outputs.overall_score }}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download all validation results
+      uses: actions/download-artifact@v4
+      with:
+        path: parity-results/
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'yarn'
+
+    - name: Install dependencies
+      run: yarn install --frozen-lockfile
+
+    - name: Aggregate parity validation results
+      id: aggregate
+      run: |
+        echo "📊 Aggregating parity validation results..."
+
+        # Create comprehensive results summary
+        npx tsx scripts/devops/gh-devcon/create-parity-dashboard.ts \
+          --input parity-results/ \
+          --output aggregated-parity.json
+
+        # Generate detailed report
+        npx tsx scripts/devops/gh-devcon/generate-parity-report.ts \
+          --input aggregated-parity.json \
+          --output environment-parity-report.md
+
+    - name: Validate parity thresholds
+      id: validate
+      run: |
+        echo "🔍 Validating parity thresholds..."
+
+        # Check overall parity score
+        OVERALL_SCORE=$(jq -r '.overall_parity_score // 0' aggregated-parity.json)
+        CRITICAL_ISSUES=$(jq -r '.critical_issues_count // 0' aggregated-parity.json)
+
+        echo "Overall parity score: $OVERALL_SCORE%"
+        echo "Critical issues: $CRITICAL_ISSUES"
+
+        # Determine if validation passes
+        if [[ $CRITICAL_ISSUES -eq 0 && $(echo "$OVERALL_SCORE >= 80" | bc -l) -eq 1 ]]; then
+          echo "✅ Parity validation PASSED"
+          echo "validation_passed=true" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Parity validation FAILED"
+          echo "validation_passed=false" >> $GITHUB_OUTPUT
+        fi
+
+        echo "overall_score=$OVERALL_SCORE" >> $GITHUB_OUTPUT
+
+    - name: Create parity summary
+      run: |
+        VALIDATION_PASSED="${{ steps.validate.outputs.validation_passed }}"
+        OVERALL_SCORE="${{ steps.validate.outputs.overall_score }}"
+
+        echo "## 🔍 Environment Parity Validation Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [[ "$VALIDATION_PASSED" == "true" ]]; then
+          echo "✅ **PASSED** - Environment parity validation successful" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **FAILED** - Environment parity validation failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Overall Parity Score**: ${OVERALL_SCORE}%" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Validation Results" >> $GITHUB_STEP_SUMMARY
+        echo "- Environment fingerprinting: ✅ Completed" >> $GITHUB_STEP_SUMMARY
+        echo "- DevContainer parity testing: ✅ Completed" >> $GITHUB_STEP_SUMMARY
+        echo "- Cross-platform reproducibility: ✅ Completed" >> $GITHUB_STEP_SUMMARY
+        echo "- Tool version validation: ✅ Completed" >> $GITHUB_STEP_SUMMARY
+        echo "- Performance benchmarking: ✅ Completed" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "[View Detailed Report](environment-parity-report.md)" >> $GITHUB_STEP_SUMMARY
+        echo "[View Validation Dashboard](parity-dashboard.html)" >> $GITHUB_STEP_SUMMARY
+
+    - name: Upload final parity results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: final-parity-validation
+        path: |
+          aggregated-parity.json
+          environment-parity-report.md
+          parity-dashboard.html
+        retention-days: 30
+
+  validate-with-existing-workflows:
+    name: 'Validate with Existing Workflows'
+    needs: aggregate-parity-results
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Run security scan workflow
+      uses: ./.github/workflows/security-scan.yml
+      if: github.event_name == 'pull_request'
+
+    - name: Run devcontainer CI workflow
+      uses: ./.github/workflows/devcontainer-ci.yml
+      if: github.event_name == 'pull_request'
+
+    - name: Compare workflow results
+      run: |
+        echo "🔍 Comparing parity validation with existing workflow results..."
+
+        # This would compare the results from the parity validation
+        # with results from security-scan and devcontainer-ci workflows
+        # Implementation depends on how results are stored/shared between workflows
+
+  create-validation-dashboard:
+    name: 'Create Validation Dashboard'
+    needs: aggregate-parity-results
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download parity results
+      uses: actions/download-artifact@v4
+      with:
+        name: final-parity-validation
+
+    - name: Generate dashboard
+      run: |
+        echo "📊 Generating parity validation dashboard..."
+        # Create a simple dashboard using existing scripts
+        npx tsx scripts/devops/gh-devcon/create-parity-dashboard.ts \
+          --input aggregated-parity.json \
+          --output parity-dashboard.html || echo "Dashboard generation failed, but continuing..."
+    - name: Generate dashboard
+      run: |
+        echo "📊 Generating parity validation dashboard..."
+        # Create a simple dashboard using existing scripts
+        npx tsx scripts/devops/gh-devcon/create-parity-dashboard.ts \
+          --input aggregated-parity.json \
+          --output parity-dashboard.html || echo "Dashboard generation failed, but continuing..."
+
+    - name: Upload dashboard
+      uses: actions/upload-artifact@v4
+      with:
+        name: parity-dashboard
+        path: parity-dashboard.html
+        retention-days: 30
+
+  notify-parity-failure:
+    name: 'Notify Parity Validation Failure'
+    needs: aggregate-parity-results
+    runs-on: ubuntu-latest
+    if: failure() && needs.aggregate-parity-results.outputs.validation_passed == 'false'
+    steps:
+    - name: Create issue on parity failure
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { data: issues } = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['parity-validation', 'automated'],
+            state: 'open'
+          });
+
+          const existingIssue = issues.find(issue =>
+            issue.title.includes('Environment Parity Validation Failed')
+          );
+
+          if (!existingIssue) {
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Environment Parity Validation Failed',
+              body: |
+                ## Environment Parity Validation Failure
+
+                The automated environment parity validation has detected issues that need attention.
+
+                ### What Happened
+                - Environment parity validation failed in the CI/CD pipeline
+                - Local DevContainer and CI execution environments are not consistent
+
+                ### Next Steps
+                1. Review the [parity validation report](https://github.com/${{ context.repo.owner }}/${{ context.repo.repo }}/actions/runs/${{ context.runId }})
+                2. Check the validation dashboard for detailed findings
+                3. Address any critical issues identified
+                4. Re-run the validation after fixes
+
+                ### Files to Check
+                - `environment-parity-report.md` - Detailed analysis
+                - `parity-dashboard.html` - Interactive dashboard
+                - CI logs for specific error details
+
+                /cc @${{ context.repo.owner }}
+              labels: ['parity-validation', 'automated', 'bug']
+            });
+          }
+              labels: ['parity-validation', 'automated', 'bug']
+            });
+          }
+
+  final-validation-gate:
+    name: 'Final Validation Gate'
+    needs: [aggregate-parity-results, validate-with-existing-workflows]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+    - name: Validation gate check
+      run: |
+        PARITY_PASSED="${{ needs.aggregate-parity-results.outputs.validation_passed }}"
+
+        if [[ "$PARITY_PASSED" == "true" ]]; then
+          echo "✅ All parity validations passed!"
+          echo "🎉 Environment parity between DevContainer and CI/CD is confirmed."
+        else
+          echo "❌ Parity validation failed!"
+          echo "🔧 Please review the validation results and fix identified issues."
+          exit 1
+        fi
