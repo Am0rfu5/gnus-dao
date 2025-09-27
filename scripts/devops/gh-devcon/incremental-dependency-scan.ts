@@ -43,6 +43,26 @@ interface VulnerabilityInfo {
 	fix_version?: string;
 }
 
+interface ToolConfig {
+	version: string;
+	command: string;
+	authentication: {
+		env_var: string;
+		required: boolean;
+	};
+	config: Record<string, unknown>;
+	cache: {
+		enabled: boolean;
+		ttl_hours: number;
+	};
+}
+
+interface ToolsConfig {
+	version: string;
+	description: string;
+	tools: Record<string, ToolConfig>;
+}
+
 interface CacheEntry {
 	dependency: string;
 	version: string;
@@ -55,7 +75,7 @@ class IncrementalDependencyScanner {
 	private readonly projectRoot: string;
 	private readonly cacheDir: string;
 	private readonly cacheFile: string;
-	private readonly toolsConfig: any;
+	private readonly toolsConfig: ToolsConfig;
 	private readonly yarnLockPath: string;
 	private readonly packageJsonPath: string;
 
@@ -68,7 +88,7 @@ class IncrementalDependencyScanner {
 		this.packageJsonPath = path.join(this.projectRoot, 'package.json');
 	}
 
-	private loadToolsConfig(): any {
+	private loadToolsConfig(): ToolsConfig {
 		const configPath = path.join(this.projectRoot, '.devcontainer/security/tools.json');
 		if (!fs.existsSync(configPath)) {
 			throw new Error(`Tools configuration not found: ${configPath}`);
@@ -193,9 +213,18 @@ class IncrementalDependencyScanner {
 
 			// Parse Snyk results
 			if (results.vulnerabilities) {
-				vulnerabilities = results.vulnerabilities.map((vuln: any) => ({
+				vulnerabilities = results.vulnerabilities.map((vuln: {
+					id: string;
+					severity: string;
+					packageName: string;
+					version: string;
+					title: string;
+					identifiers?: { CWE?: string[] };
+					cvssScore?: number;
+					fixAvailable?: { upgradePath?: string[] };
+				}) => ({
 					id: vuln.id,
-					severity: vuln.severity,
+					severity: vuln.severity as 'low' | 'medium' | 'high' | 'critical',
 					package: vuln.packageName,
 					version: vuln.version,
 					description: vuln.title,
@@ -219,8 +248,8 @@ class IncrementalDependencyScanner {
 					changed_dependencies: changedDeps?.length || 0,
 				},
 			};
-		} catch (error: any) {
-			console.error(`❌ Snyk scan failed:`, error.message);
+		} catch (error: unknown) {
+			console.error(`❌ Snyk scan failed:`, error instanceof Error ? error.message : String(error));
 			throw error;
 		}
 	}
@@ -273,8 +302,8 @@ class IncrementalDependencyScanner {
 					changed_dependencies: changedDeps?.length || 0,
 				},
 			};
-		} catch (error: any) {
-			console.error(`❌ Socket scan failed:`, error.message);
+		} catch (error: unknown) {
+			console.error(`❌ Socket scan failed:`, error instanceof Error ? error.message : String(error));
 			throw error;
 		}
 	}
@@ -328,8 +357,8 @@ class IncrementalDependencyScanner {
 					changed_dependencies: changedDeps?.length || 0,
 				},
 			};
-		} catch (error: any) {
-			console.error(`❌ OSV-Scanner scan failed:`, error.message);
+		} catch (error: unknown) {
+			console.error(`❌ OSV-Scanner scan failed:`, error instanceof Error ? error.message : String(error));
 			throw error;
 		}
 	}

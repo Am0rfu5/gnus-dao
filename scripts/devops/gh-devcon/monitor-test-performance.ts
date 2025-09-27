@@ -1,5 +1,6 @@
 // scripts/devops/gh-devcon/monitor-test-performance.ts
 import { spawn } from 'child_process';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -70,6 +71,24 @@ interface PerformanceReport {
 	};
 }
 
+interface TestExecutionOptions {
+	args?: string[];
+	env?: Record<string, string>;
+}
+
+interface PerformanceHistoryEntry {
+	timestamp: string;
+	executionTime: number;
+	memoryPeak: number;
+	cpuPeak: number;
+}
+
+interface PerformanceTrend {
+	executionTimeTrend: number;
+	dataPoints: number;
+	improving: boolean;
+}
+
 class TestPerformanceMonitor {
 	private metrics: PerformanceReport;
 	private startTime: number;
@@ -113,7 +132,7 @@ class TestPerformanceMonitor {
 		};
 	}
 
-	async monitorTestExecution(testCommand: string, options: any = {}): Promise<TestResult> {
+	async monitorTestExecution(testCommand: string, options: TestExecutionOptions = {}): Promise<TestResult> {
 		console.log('📊 Starting test performance monitoring...');
 
 		const child = spawn(testCommand, options.args || [], {
@@ -177,7 +196,7 @@ class TestPerformanceMonitor {
 		// In a real implementation, you'd collect CPU usage here
 		// For now, we'll use a placeholder
 		this.metrics.performance.cpuUsage[timestamp] = {
-			usage: Math.random() * 100, // Placeholder
+			usage: crypto.randomInt(0, 100), // Mock CPU usage for testing
 		};
 	}
 
@@ -380,10 +399,10 @@ class TestPerformanceMonitor {
 		return this.metrics;
 	}
 
-	private async calculateTrends(): Promise<any> {
+	private async calculateTrends(): Promise<PerformanceTrend> {
 		// Load historical data if available
 		const historyFile = 'test-assets/test-output/performance-history.json';
-		let history: any[] = [];
+		let history: PerformanceHistoryEntry[] = [];
 
 		try {
 			if (fs.existsSync(historyFile)) {

@@ -26,7 +26,7 @@ interface SARIFRun {
 	results: SARIFResult[];
 	invocations?: SARIFInvocation[];
 	properties?: {
-		[key: string]: any;
+		[key: string]: unknown;
 	};
 }
 
@@ -41,7 +41,7 @@ interface SARIFRule {
 	};
 	helpUri?: string;
 	properties?: {
-		[key: string]: any;
+		[key: string]: unknown;
 	};
 }
 
@@ -53,7 +53,7 @@ interface SARIFResult {
 	};
 	locations: SARIFLocation[];
 	properties?: {
-		[key: string]: any;
+		[key: string]: unknown;
 	};
 }
 
@@ -80,7 +80,7 @@ interface SARIFInvocation {
 	startTimeUtc: string;
 	endTimeUtc: string;
 	properties?: {
-		[key: string]: any;
+		[key: string]: unknown;
 	};
 }
 
@@ -88,8 +88,11 @@ interface SecurityScanResult {
 	tool: string;
 	timestamp: string;
 	vulnerabilities?: VulnerabilityInfo[];
-	results?: any[];
-	issues?: any[];
+	snykResults?: SnykResult[];
+	socketResults?: SocketResult[];
+	semgrepResults?: SemgrepResult[];
+	osvResults?: OSVResult[];
+	slitherResults?: SlitherResult[];
 }
 
 interface VulnerabilityInfo {
@@ -106,11 +109,95 @@ interface VulnerabilityInfo {
 	fix_version?: string;
 }
 
+interface SnykResult {
+	id?: string;
+	packageName: string;
+	version: string;
+	severity?: string;
+	title?: string;
+	description?: string;
+	filePath?: string;
+	lineNumber?: number;
+	identifiers?: {
+		CWE?: string[];
+	};
+	cvssScore?: number;
+	fixAvailable?: {
+		upgradePath?: string[];
+	};
+}
+
+interface SocketResult {
+	key?: string;
+	package: string;
+	version: string;
+	severity?: string;
+	description?: string;
+	cwe_ids?: string[];
+	fix?: string;
+}
+
+interface SemgrepResult {
+	check_id?: string;
+	path: string;
+	line: number;
+	extra?: {
+		message?: string;
+		severity?: string;
+		metadata?: {
+			cwe?: string[];
+		};
+	};
+}
+
+interface OSVResult {
+	package?: {
+		name: string;
+		version: string;
+	};
+	vulnerabilities?: OSVVulnerability[];
+}
+
+interface OSVVulnerability {
+	id: string;
+	severity?: string;
+	summary?: string;
+	cwe_ids?: string[];
+}
+
+interface SlitherResult {
+	check?: string;
+	contract?: string;
+	line: number;
+	impact?: string;
+	description?: string;
+	file: string;
+	cwe_ids?: string[];
+}
+
 class SARIFGenerator {
 	private readonly projectRoot: string;
 
 	constructor() {
 		this.projectRoot = path.resolve(__dirname, '../../..');
+	}
+
+	private mapSeverity(severity: string): 'low' | 'medium' | 'high' | 'critical' {
+		switch (severity.toLowerCase()) {
+			case 'critical':
+			case 'error':
+				return 'critical';
+			case 'high':
+			case 'warning':
+				return 'high';
+			case 'medium':
+			case 'info':
+				return 'medium';
+			case 'low':
+				return 'low';
+			default:
+				return 'medium';
+		}
 	}
 
 	private mapSeverityToLevel(severity: string): 'error' | 'warning' | 'note' | 'none' {
@@ -197,10 +284,10 @@ class SARIFGenerator {
 		return result;
 	}
 
-	private normalizeSnykResults(results: any[]): VulnerabilityInfo[] {
+	private normalizeSnykResults(results: SnykResult[]): VulnerabilityInfo[] {
 		return results.map((result) => ({
 			id: result.id || `snyk-${result.packageName}-${result.version}`,
-			severity: result.severity || 'medium',
+			severity: this.mapSeverity(result.severity || 'medium'),
 			package: result.packageName,
 			version: result.version,
 			description: result.title || result.description || 'Security vulnerability detected',
@@ -213,10 +300,10 @@ class SARIFGenerator {
 		}));
 	}
 
-	private normalizeSocketResults(results: any[]): VulnerabilityInfo[] {
+	private normalizeSocketResults(results: SocketResult[]): VulnerabilityInfo[] {
 		return results.map((result) => ({
 			id: result.key || `socket-${result.package}-${result.version}`,
-			severity: result.severity || 'medium',
+			severity: this.mapSeverity(result.severity || 'medium'),
 			package: result.package,
 			version: result.version,
 			description: result.description || 'Supply chain vulnerability detected',
@@ -226,10 +313,10 @@ class SARIFGenerator {
 		}));
 	}
 
-	private normalizeSemgrepResults(results: any[]): VulnerabilityInfo[] {
+	private normalizeSemgrepResults(results: SemgrepResult[]): VulnerabilityInfo[] {
 		return results.map((result) => ({
 			id: result.check_id || `semgrep-${result.path}-${result.line}`,
-			severity: result.extra?.severity || 'medium',
+			severity: this.mapSeverity(result.extra?.severity || 'medium'),
 			description: result.extra?.message || 'Code security issue detected',
 			file_path: result.path,
 			line_number: result.line,
@@ -237,7 +324,7 @@ class SARIFGenerator {
 		}));
 	}
 
-	private normalizeOSVResults(results: any[]): VulnerabilityInfo[] {
+	private normalizeOSVResults(results: OSVResult[]): VulnerabilityInfo[] {
 		const vulnerabilities: VulnerabilityInfo[] = [];
 
 		for (const result of results) {
@@ -245,7 +332,7 @@ class SARIFGenerator {
 				for (const vuln of result.vulnerabilities) {
 					vulnerabilities.push({
 						id: vuln.id,
-						severity: vuln.severity || 'medium',
+						severity: this.mapSeverity(vuln.severity || 'medium'),
 						package: result.package?.name,
 						version: result.package?.version,
 						description: vuln.summary || 'Vulnerability detected by OSV',
@@ -258,10 +345,10 @@ class SARIFGenerator {
 		return vulnerabilities;
 	}
 
-	private normalizeSlitherResults(results: any[]): VulnerabilityInfo[] {
+	private normalizeSlitherResults(results: SlitherResult[]): VulnerabilityInfo[] {
 		return results.map((result) => ({
 			id: result.check || `slither-${result.contract}-${result.line}`,
-			severity: result.impact || 'medium',
+			severity: this.mapSeverity(result.impact || 'medium'),
 			description: result.description || 'Smart contract security issue detected',
 			file_path: result.file,
 			line_number: result.line,
@@ -273,16 +360,27 @@ class SARIFGenerator {
 		switch (scanResult.tool) {
 			case 'snyk':
 				return this.normalizeSnykResults(
-					scanResult.vulnerabilities || scanResult.results || [],
+					scanResult.snykResults || scanResult.vulnerabilities?.map(v => ({
+						packageName: v.package || '',
+						version: v.version || '',
+						severity: v.severity,
+						title: v.description,
+						description: v.description,
+						filePath: v.file_path,
+						lineNumber: v.line_number,
+						identifiers: { CWE: v.cwe_ids },
+						cvssScore: v.cvss_score,
+						fixAvailable: v.fix_available ? { upgradePath: v.fix_version ? [v.fix_version] : [] } : undefined,
+					})) || [],
 				);
 			case 'socket':
-				return this.normalizeSocketResults(scanResult.issues || scanResult.results || []);
+				return this.normalizeSocketResults(scanResult.socketResults || []);
 			case 'semgrep':
-				return this.normalizeSemgrepResults(scanResult.results || []);
+				return this.normalizeSemgrepResults(scanResult.semgrepResults || []);
 			case 'osv-scanner':
-				return this.normalizeOSVResults(scanResult.results || []);
+				return this.normalizeOSVResults(scanResult.osvResults || []);
 			case 'slither':
-				return this.normalizeSlitherResults(scanResult.results || []);
+				return this.normalizeSlitherResults(scanResult.slitherResults || []);
 			default:
 				console.warn(`Unknown tool: ${scanResult.tool}`);
 				return [];

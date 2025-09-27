@@ -1,0 +1,7 @@
+{
+  "interval_minutes": 240,
+  "baseline_file": "environment-baseline.json",
+  "log_file": "environment-monitoring.log",
+  "alert_threshold": "high",
+  "max_history_entries": 1000
+}

@@ -1,0 +1,11 @@
+{
+  "alert_levels": ["high", "critical"],
+  "cooldown_minutes": 60,
+  "webhook_url": "${SLACK_WEBHOOK_URL}",
+  "slack_channel": "#devops-alerts",
+  "teams_webhook_url": "${TEAMS_WEBHOOK_URL}",
+  "email_recipients": [
+    "devops@gnus.ai",
+    "security@gnus.ai"
+  ]
+}

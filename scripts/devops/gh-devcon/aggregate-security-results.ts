@@ -7,6 +7,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 
 interface AggregatedSecurityResult {
 	timestamp: string;
@@ -54,7 +55,100 @@ interface VulnerabilityInfo {
 	fix_available?: boolean;
 	fix_version?: string;
 	references?: string[];
-	tags?: string[];
+}
+
+interface SnykResult {
+	tool: 'snyk';
+	vulnerabilities: SnykVulnerability[];
+}
+
+interface SnykVulnerability {
+	id: string;
+	title: string;
+	description?: string;
+	severity: string;
+	packageName: string;
+	version: string;
+	identifiers?: {
+		CWE?: string[];
+	};
+	cvssScore?: number;
+	fixAvailable?: {
+		upgradePath?: string[];
+	};
+	references?: string[];
+}
+
+interface SocketResult {
+	tool: 'socket';
+	issues: SocketIssue[];
+}
+
+interface SocketIssue {
+	key: string;
+	type: 'vulnerability';
+	severity: string;
+	title?: string;
+	description: string;
+	package: string;
+	version: string;
+	fix?: string;
+}
+
+interface OSVScannerResult {
+	tool: 'osv-scanner';
+	results: OSVPackageResult[];
+}
+
+interface OSVPackageResult {
+	package?: {
+		name: string;
+		version: string;
+	};
+	vulnerabilities: OSVVulnerability[];
+}
+
+interface OSVVulnerability {
+	id: string;
+	summary: string;
+	details?: string;
+	severity?: string;
+	cwe_ids?: string[];
+	references?: string[];
+}
+
+interface SemgrepCodeResult {
+	tool: 'semgrep';
+	results: SemgrepFinding[];
+}
+
+interface SemgrepFinding {
+	check_id: string;
+	path: string;
+	line: number;
+	extra: {
+		message: string;
+		severity?: string;
+		metadata?: {
+			cwe?: string[];
+		};
+	};
+}
+
+interface SlitherCodeResult {
+	tool: 'slither';
+	results: {
+		detectors: SlitherDetector[];
+	};
+}
+
+interface SlitherDetector {
+	check: string;
+	description: string;
+	file: string;
+	line: number;
+	impact?: string;
+	cwe_ids?: string[];
 }
 
 class SecurityResultsAggregator {
@@ -62,6 +156,24 @@ class SecurityResultsAggregator {
 
 	constructor() {
 		this.projectRoot = path.resolve(__dirname, '../../..');
+	}
+
+	private mapSeverity(severity: string): 'critical' | 'high' | 'medium' | 'low' | 'info' {
+		switch (severity.toLowerCase()) {
+			case 'critical':
+			case 'error':
+				return 'critical';
+			case 'high':
+			case 'warning':
+				return 'high';
+			case 'medium':
+			case 'info':
+				return 'medium';
+			case 'low':
+				return 'low';
+			default:
+				return 'info';
+		}
 	}
 
 	private getGitInfo(): { commit_sha: string; branch: string } {
@@ -83,7 +195,7 @@ class SecurityResultsAggregator {
 		}
 	}
 
-	private parseDependencyResults(results: any): VulnerabilityInfo[] {
+	private parseDependencyResults(results: SnykResult | SocketResult | OSVScannerResult): VulnerabilityInfo[] {
 		const vulnerabilities: VulnerabilityInfo[] = [];
 
 		// Handle different tool formats
@@ -92,7 +204,7 @@ class SecurityResultsAggregator {
 				vulnerabilities.push({
 					id: vuln.id,
 					tool: 'snyk',
-					severity: vuln.severity || 'medium',
+					severity: this.mapSeverity(vuln.severity || 'medium'),
 					title: vuln.title,
 					description: vuln.description || vuln.title,
 					package: vuln.packageName,
@@ -112,7 +224,7 @@ class SecurityResultsAggregator {
 					vulnerabilities.push({
 						id: issue.key,
 						tool: 'socket',
-						severity: issue.severity || 'medium',
+						severity: this.mapSeverity(issue.severity || 'medium'),
 						title: issue.title || issue.key,
 						description: issue.description,
 						package: issue.package,
@@ -131,7 +243,7 @@ class SecurityResultsAggregator {
 						vulnerabilities.push({
 							id: vuln.id,
 							tool: 'osv-scanner',
-							severity: vuln.severity || 'medium',
+							severity: this.mapSeverity(vuln.severity || 'medium'),
 							title: vuln.summary,
 							description: vuln.details || vuln.summary,
 							package: result.package?.name,
@@ -147,7 +259,7 @@ class SecurityResultsAggregator {
 		return vulnerabilities;
 	}
 
-	private parseCodeResults(results: any): VulnerabilityInfo[] {
+	private parseCodeResults(results: SemgrepCodeResult | SlitherCodeResult): VulnerabilityInfo[] {
 		const vulnerabilities: VulnerabilityInfo[] = [];
 
 		// Handle different tool formats
@@ -156,7 +268,7 @@ class SecurityResultsAggregator {
 				vulnerabilities.push({
 					id: result.check_id,
 					tool: 'semgrep',
-					severity: result.extra?.severity || 'medium',
+					severity: this.mapSeverity(result.extra?.severity || 'medium'),
 					title: result.extra?.message,
 					description: result.extra?.message,
 					file_path: result.path,
@@ -171,7 +283,7 @@ class SecurityResultsAggregator {
 				vulnerabilities.push({
 					id: result.check,
 					tool: 'slither',
-					severity: result.impact || 'medium',
+					severity: this.mapSeverity(result.impact || 'medium'),
 					title: result.description,
 					description: result.description,
 					file_path: result.file,
@@ -230,7 +342,7 @@ class SecurityResultsAggregator {
 
 	aggregateResults(inputDir: string): AggregatedSecurityResult {
 		const gitInfo = this.getGitInfo();
-		const scanId = `scan-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+		const scanId = `scan-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
 
 		let allVulnerabilities: VulnerabilityInfo[] = [];
 		const tools: SecurityToolResult[] = [];

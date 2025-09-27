@@ -23,7 +23,7 @@ interface ForkResult {
 interface RpcResponse {
 	jsonrpc: string;
 	id: number;
-	result: any;
+	result: unknown;
 }
 
 type SupportedNetwork = 'ethereum' | 'polygon' | 'arbitrum' | 'optimism';
@@ -147,8 +147,8 @@ class BlockchainForkManager {
 	private async makeRpcCall(
 		port: number,
 		method: string,
-		params: any[] = [],
-	): Promise<any> {
+		params: unknown[] = [],
+	): Promise<unknown> {
 		const postData = JSON.stringify({
 			jsonrpc: '2.0',
 			id: 1,
@@ -226,7 +226,7 @@ class BlockchainForkManager {
 	async cleanup(): Promise<void> {
 		console.log('Cleaning up blockchain forks...');
 
-		for (const [networkName, process] of this.processes) {
+		for (const [networkName, process] of Array.from(this.processes)) {
 			try {
 				process.kill('SIGTERM');
 				console.log(`Stopped ${networkName} fork`);

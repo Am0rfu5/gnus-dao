@@ -1,0 +1,421 @@
+name: 'Performance Monitoring'
+
+on:
+  workflow_run:
+    workflows: ['DevContainer CI', 'Security Scan', 'Parallel Test']
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      target_workflow:
+        description: 'Target workflow to monitor'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - devcontainer-ci
+          - security-scan
+          - parallel-test
+      baseline_comparison:
+        description: 'Compare with baseline metrics'
+        required: false
+        default: true
+        type: boolean
+      generate_report:
+        description: 'Generate performance report'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  collect-performance-metrics:
+    name: 'Collect Performance Metrics'
+    runs-on: ubuntu-latest
+    outputs:
+      performance_score: ${{ steps.performance.outputs.score }}
+      critical_issues: ${{ steps.performance.outputs.critical_issues }}
+      workflow_time: ${{ steps.performance.outputs.workflow_time }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'yarn'
+
+    - name: Install dependencies
+      run: yarn install --frozen-lockfile
+
+    - name: Download workflow artifacts
+      if: github.event_name == 'workflow_run'
+      uses: actions/download-artifact@v4
+      with:
+        name: performance-metrics
+        path: ./performance-data/
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        repository: ${{ github.repository }}
+        run-id: ${{ github.event.workflow_run.id }}
+
+    - name: Collect performance metrics
+      id: performance
+      run: |
+        echo "🔍 Collecting performance metrics..."
+
+        # Set environment variables for GitHub Actions context
+        export GITHUB_ACTIONS=true
+        export WORKFLOW_TOTAL_TIME="${{ github.event.workflow_run.created_at && github.event.workflow_run.updated_at && ((new Date(github.event.workflow_run.updated_at) - new Date(github.event.workflow_run.created_at)) / 1000) || 0 }}"
+        export WORKFLOW_QUEUE_TIME="${{ github.event.workflow_run.created_at && github.event.workflow_run.run_started_at && ((new Date(github.event.workflow_run.run_started_at) - new Date(github.event.workflow_run.created_at)) / 1000) || 0 }}"
+
+        # Collect metrics
+        npx tsx scripts/devops/gh-devcon/performance-monitor.ts \
+          --output performance-metrics.json \
+          --verbose
+
+        # Extract key metrics for outputs
+        PERFORMANCE_SCORE=$(jq -r '.optimization.performance_score // 0' performance-metrics.json)
+        CRITICAL_ISSUES=$(jq -r '.optimization.bottlenecks | length // 0' performance-metrics.json)
+        WORKFLOW_TIME=$(jq -r '.workflow.total_workflow_time // 0' performance-metrics.json)
+
+        echo "score=$PERFORMANCE_SCORE" >> $GITHUB_OUTPUT
+        echo "critical_issues=$CRITICAL_ISSUES" >> $GITHUB_OUTPUT
+        echo "workflow_time=$WORKFLOW_TIME" >> $GITHUB_OUTPUT
+
+        # Create performance summary for step summary
+        echo "## 🚀 Performance Monitoring Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Performance Score**: $PERFORMANCE_SCORE/100" >> $GITHUB_STEP_SUMMARY
+        echo "**Critical Issues**: $CRITICAL_ISSUES" >> $GITHUB_STEP_SUMMARY
+        echo "**Workflow Time**: $WORKFLOW_TIME ms" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Add status indicator
+        if [ "$PERFORMANCE_SCORE" -ge 80 ]; then
+          echo "✅ **Status**: Good performance" >> $GITHUB_STEP_SUMMARY
+        elif [ "$PERFORMANCE_SCORE" -ge 60 ]; then
+          echo "⚠️ **Status**: Needs optimization" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Status**: Critical performance issues" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Upload performance metrics
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-metrics
+        path: performance-metrics.json
+        retention-days: 30
+
+  detect-performance-regression:
+    name: 'Detect Performance Regression'
+    needs: collect-performance-metrics
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'yarn'
+
+    - name: Install dependencies
+      run: yarn install --frozen-lockfile
+
+    - name: Download baseline metrics
+      uses: actions/download-artifact@v4
+      with:
+        name: performance-baseline
+        path: ./baseline-data/
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Download current metrics
+      uses: actions/download-artifact@v4
+      with:
+        name: performance-metrics
+        path: ./current-data/
+
+    - name: Detect performance regression
+      id: regression
+      run: |
+        echo "🔍 Detecting performance regression..."
+
+        BASELINE_FILE="./baseline-data/performance-baseline.json"
+        CURRENT_FILE="./current-data/performance-metrics.json"
+
+        # Check if baseline exists
+        if [ ! -f "$BASELINE_FILE" ]; then
+          echo "No baseline found, creating initial baseline..."
+          cp "$CURRENT_FILE" "$BASELINE_FILE"
+          echo "regression_detected=false" >> $GITHUB_OUTPUT
+          echo "regression_level=none" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        # Run regression detection
+        npx tsx scripts/devops/gh-devcon/detect-performance-regression.ts \
+          --baseline "$BASELINE_FILE" \
+          --current "$CURRENT_FILE" \
+          --output regression-analysis.json
+
+        # Check regression results
+        REGRESSION_DETECTED=$(jq -r '.regression_detected // false' regression-analysis.json)
+        REGRESSION_LEVEL=$(jq -r '.regression_level // "none"' regression-analysis.json)
+
+        echo "regression_detected=$REGRESSION_DETECTED" >> $GITHUB_OUTPUT
+        echo "regression_level=$REGRESSION_LEVEL" >> $GITHUB_OUTPUT
+
+        # Add to step summary
+        echo "## 🔍 Performance Regression Analysis" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ "$REGRESSION_DETECTED" = "true" ]; then
+          echo "⚠️ **Regression Detected**: $REGRESSION_LEVEL level" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Recommendations**:" >> $GITHUB_STEP_SUMMARY
+          jq -r '.recommendations[]' regression-analysis.json >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ **No Regression Detected**" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Upload regression analysis
+      uses: actions/upload-artifact@v4
+      with:
+        name: regression-analysis
+        path: regression-analysis.json
+        retention-days: 30
+
+  analyze-cost-optimization:
+    name: 'Analyze Cost Optimization'
+    needs: collect-performance-metrics
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'yarn'
+
+    - name: Install dependencies
+      run: yarn install --frozen-lockfile
+
+    - name: Analyze GitHub Actions costs
+      run: |
+        echo "💰 Analyzing GitHub Actions costs..."
+
+        # This would integrate with GitHub API to get usage data
+        # For now, create a placeholder analysis
+        npx tsx scripts/devops/gh-devcon/analyze-github-actions-costs.ts \
+          --period 30days \
+          --output cost-analysis.json
+
+    - name: Generate cost optimization recommendations
+      run: |
+        echo "💡 Generating cost optimization recommendations..."
+
+        npx tsx scripts/devops/gh-devcon/optimize-workflow-costs.ts \
+          --analysis cost-analysis.json \
+          --output cost-optimization-plan.json
+
+        # Add cost analysis to step summary
+        echo "## 💰 Cost Optimization Analysis" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ -f "cost-optimization-plan.json" ]; then
+          echo "**Potential Savings**: $(jq -r '.potential_savings // "Unknown"' cost-optimization-plan.json)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Recommendations**:" >> $GITHUB_STEP_SUMMARY
+          jq -r '.recommendations[]' cost-optimization-plan.json >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No specific recommendations available" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "Cost analysis not available" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Upload cost analysis
+      uses: actions/upload-artifact@v4
+      with:
+        name: cost-analysis
+        path: |
+          cost-analysis.json
+          cost-optimization-plan.json
+        retention-days: 30
+
+  generate-performance-report:
+    name: 'Generate Performance Report'
+    needs: [collect-performance-metrics, detect-performance-regression, analyze-cost-optimization]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'yarn'
+
+    - name: Install dependencies
+      run: yarn install --frozen-lockfile
+
+    - name: Download all analysis artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: performance-metrics
+        path: ./artifacts/
+
+    - name: Download regression analysis
+      uses: actions/download-artifact@v4
+      with:
+        name: regression-analysis
+        path: ./artifacts/
+
+    - name: Download cost analysis
+      uses: actions/download-artifact@v4
+      with:
+        name: cost-analysis
+        path: ./artifacts/
+
+    - name: Generate comprehensive performance report
+      run: |
+        echo "📊 Generating comprehensive performance report..."
+
+        npx tsx scripts/devops/gh-devcon/generate-performance-report.ts \
+          --input ./artifacts/ \
+          --output performance-report.md \
+          --format markdown
+
+        # Create HTML dashboard
+        npx tsx scripts/devops/gh-devcon/create-performance-dashboard.ts \
+          --data ./artifacts/ \
+          --output performance-dashboard.html
+
+    - name: Upload performance report
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-report
+        path: |
+          performance-report.md
+          performance-dashboard.html
+        retention-days: 30
+
+  performance-alerting:
+    name: 'Performance Alerting'
+    needs: [collect-performance-metrics, detect-performance-regression]
+    runs-on: ubuntu-latest
+    if: failure() || needs.detect-performance-regression.outputs.regression_detected == 'true'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Create performance issue
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { data: issues } = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['performance', 'automated'],
+            state: 'open'
+          });
+
+          const existingIssue = issues.find(issue =>
+            issue.title.includes('Performance Issues Detected')
+          );
+
+          if (!existingIssue) {
+            const performanceScore = ${{ needs.collect-performance-metrics.outputs.performance_score }};
+            const regressionDetected = '${{ needs.detect-performance-regression.outputs.regression_detected }}' === 'true';
+            const regressionLevel = '${{ needs.detect-performance-regression.outputs.regression_level }}';
+
+            let body = `## 🚨 Performance Issues Detected
+
+            Automated performance monitoring has detected issues that need attention.
+
+            ### Current Status
+            - **Performance Score**: ${performanceScore}/100
+            - **Regression Detected**: ${regressionDetected ? 'Yes' : 'No'}`;
+
+            if (regressionDetected) {
+              body += `
+            - **Regression Level**: ${regressionLevel}`;
+            }
+
+            body += `
+
+            ### Next Steps
+            1. Review the [performance report](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+            2. Check the performance dashboard for detailed metrics
+            3. Address any critical performance bottlenecks
+            4. Re-run performance monitoring after fixes
+
+            ### Files to Check
+            - \`performance-report.md\` - Comprehensive analysis
+            - \`performance-dashboard.html\` - Interactive dashboard
+            - Performance metrics in workflow artifacts
+
+            /cc @${context.repo.owner}`;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Performance Issues Detected',
+              body: body,
+              labels: ['performance', 'automated', 'bug']
+            });
+          }
+
+  update-performance-baseline:
+    name: 'Update Performance Baseline'
+    needs: [collect-performance-metrics, detect-performance-regression]
+    runs-on: ubuntu-latest
+    if: success() && needs.detect-performance-regression.outputs.regression_detected == 'false'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download current metrics
+      uses: actions/download-artifact@v4
+      with:
+        name: performance-metrics
+        path: ./current-metrics/
+
+    - name: Update performance baseline
+      run: |
+        echo "📈 Updating performance baseline..."
+
+        # Copy current metrics as new baseline
+        cp ./current-metrics/performance-metrics.json ./performance-baseline.json
+
+        # Commit baseline update if on main branch
+        if [ "${{ github.ref }}" = "refs/heads/develop" ] || [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add performance-baseline.json
+          git commit -m "chore: update performance baseline
+
+          Performance score: ${{ needs.collect-performance-metrics.outputs.performance_score }}/100
+          Workflow time: ${{ needs.collect-performance-metrics.outputs.workflow_time }}ms
+          Critical issues: ${{ needs.collect-performance-metrics.outputs.critical_issues }}
+
+          Auto-generated by performance monitoring workflow" || echo "No changes to commit"
+          git push
+        fi
+
+    - name: Upload updated baseline
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-baseline
+        path: performance-baseline.json
+        retention-days: 90

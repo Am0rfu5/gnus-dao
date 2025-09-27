@@ -34,6 +34,10 @@ interface ErrorInfo {
 	error: string;
 }
 
+interface MostFailingCategory extends CategoryStats {
+	category: string;
+}
+
 interface AggregatedResults {
 	timestamp: string;
 	total_tests: number;
@@ -66,7 +70,7 @@ interface TestReport {
 	performance: {
 		slowest_shard: ShardInfo | null;
 		fastest_shard: ShardInfo | null;
-		most_failing_category: any;
+		most_failing_category: MostFailingCategory;
 	};
 	recommendations: string[];
 }
@@ -317,14 +321,14 @@ class TestResultsAggregator {
 		);
 	}
 
-	private findMostFailingCategory(): any {
+	private findMostFailingCategory(): MostFailingCategory {
 		return Object.entries(this.results.categories).reduce(
 			(worst, [category, stats]) => {
 				const failRate = stats.total > 0 ? stats.failed / stats.total : 0;
 				const worstFailRate = worst.total > 0 ? worst.failed / worst.total : 0;
 				return failRate > worstFailRate ? { category, ...stats } : worst;
 			},
-			{ category: 'none', total: 0, failed: 0 },
+			{ category: 'none', total: 0, failed: 0, passed: 0, time: 0 },
 		);
 	}
 

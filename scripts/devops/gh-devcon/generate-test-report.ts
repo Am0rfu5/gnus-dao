@@ -3,6 +3,37 @@ import * as fs from 'fs';
 import * as path from 'path';
 import TestResultsAggregator from './aggregate-test-results';
 
+interface CategoryStats {
+	total: number;
+	passed: number;
+	failed: number;
+	time: number;
+	success_rate?: number;
+}
+
+interface NetworkStats {
+	total: number;
+	passed: number;
+	failed: number;
+	time: number;
+	success_rate?: number;
+}
+
+interface ShardInfo {
+	shard: number;
+	category: string;
+	network: string | null;
+	tests: number;
+	passed: number;
+	failed: number;
+	time: number;
+}
+
+interface ErrorInfo {
+	file: string;
+	error: string;
+}
+
 interface ReportResults {
 	total_tests: number;
 	passed: number;
@@ -13,10 +44,10 @@ interface ReportResults {
 	success_rate?: number;
 	avg_time_per_test?: number;
 	timestamp: string;
-	categories: Record<string, any>;
-	networks: Record<string, any>;
-	shards: any[];
-	errors: any[];
+	categories: Record<string, CategoryStats>;
+	networks: Record<string, NetworkStats>;
+	shards: ShardInfo[];
+	errors: ErrorInfo[];
 }
 
 class TestReportGenerator {
@@ -127,7 +158,7 @@ class TestReportGenerator {
     <h2>🌐 Multi-Chain Results</h2>
     ${Object.entries(results.networks)
 			.map(
-				([network, stats]: [string, any]) => `
+				([network, stats]: [string, NetworkStats]) => `
         <div class="network">
             <h3>${network.charAt(0).toUpperCase() + network.slice(1)}</h3>
             <p>Tests: ${stats.total} | Passed: ${stats.passed} | Failed: ${stats.failed} | Success: ${stats.success_rate}% | Time: ${Math.round(stats.time / 1000)}s</p>
@@ -156,7 +187,7 @@ class TestReportGenerator {
         <tbody>
             ${results.shards
 							.map(
-								(shard: any) => `
+								(shard: ShardInfo) => `
                 <tr>
                     <td>${shard.shard}</td>
                     <td>${shard.category}</td>
@@ -178,7 +209,7 @@ class TestReportGenerator {
 				? `
         <h2>⚠️ Errors</h2>
         <ul>
-            ${results.errors.map((error: any) => `<li><strong>${error.file}:</strong> ${error.error}</li>`).join('')}
+            ${results.errors.map((error: ErrorInfo) => `<li><strong>${error.file}:</strong> ${error.error}</li>`).join('')}
         </ul>
     `
 				: ''
@@ -237,7 +268,7 @@ ${Object.entries(results.categories)
 
 ${Object.entries(results.networks)
 	.map(
-		([network, stats]: [string, any]) => `
+		([network, stats]: [string, NetworkStats]) => `
 ### ${network.charAt(0).toUpperCase() + network.slice(1)}
 - Tests: ${stats.total}
 - Passed: ${stats.passed}
@@ -278,7 +309,7 @@ ${Object.entries(results.networks)
 			},
 			categories: results.categories,
 			networks: results.networks,
-			shards: results.shards.map((shard: any) => ({
+			shards: results.shards.map((shard: ShardInfo) => ({
 				shard: shard.shard,
 				category: shard.category,
 				network: shard.network,

@@ -19,7 +19,7 @@ interface SecurityBaseline {
 
 interface ToolBaseline {
 	version: string;
-	config: Record<string, any>;
+	config: Record<string, unknown>;
 	expected_results: {
 		vulnerabilities: number;
 		severity_breakdown: Record<string, number>;
@@ -42,11 +42,68 @@ interface SecurityException {
 	expires_at?: string;
 }
 
+interface ToolsConfig {
+	tools: Record<string, ToolConfig>;
+}
+
+interface ToolConfig {
+	version: string;
+	config: Record<string, unknown>;
+}
+
+interface SnykScanResult {
+	vulnerabilities: SnykVulnerability[];
+}
+
+interface SnykVulnerability {
+	severity?: string;
+}
+
+interface SocketScanResult {
+	issues: SocketIssue[];
+}
+
+interface SocketIssue {
+	severity?: string;
+}
+
+interface SemgrepScanResult {
+	results: SemgrepFinding[];
+}
+
+interface SemgrepFinding {
+	extra?: {
+		severity?: string;
+	};
+}
+
+interface OSVScanResult {
+	results: OSVPackageResult[];
+}
+
+interface OSVPackageResult {
+	vulnerabilities?: OSVVulnerability[];
+}
+
+interface OSVVulnerability {
+	severity?: string;
+}
+
+interface SlitherScanResult {
+	results: {
+		detectors: SlitherDetector[];
+	};
+}
+
+interface SlitherDetector {
+	impact?: string;
+}
+
 class SecurityBaselineManager {
 	private readonly projectRoot: string;
 	private readonly baselinesDir: string;
 	private readonly currentBaselineFile: string;
-	private readonly toolsConfig: any;
+	private readonly toolsConfig: ToolsConfig;
 
 	constructor() {
 		this.projectRoot = path.resolve(__dirname, '../../..');
@@ -55,7 +112,7 @@ class SecurityBaselineManager {
 		this.toolsConfig = this.loadToolsConfig();
 	}
 
-	private loadToolsConfig(): any {
+	private loadToolsConfig(): ToolsConfig {
 		const configPath = path.join(this.projectRoot, '.devcontainer/security/tools.json');
 		if (!fs.existsSync(configPath)) {
 			throw new Error(`Tools configuration not found: ${configPath}`);
@@ -97,7 +154,7 @@ class SecurityBaselineManager {
 		console.log(`✅ Baseline saved to: ${this.currentBaselineFile}`);
 	}
 
-	private async runSecurityScan(tool: string): Promise<any> {
+	private async runSecurityScan(tool: string): Promise<SnykScanResult | SocketScanResult | SemgrepScanResult | OSVScanResult | SlitherScanResult | { vulnerabilities: unknown[]; summary: { total: number } }> {
 		const toolConfig = this.toolsConfig.tools[tool];
 		if (!toolConfig) {
 			throw new Error(`Tool configuration not found: ${tool}`);
@@ -107,12 +164,12 @@ class SecurityBaselineManager {
 
 		try {
 			let command: string;
-			let result: any;
+			let result: SnykScanResult | SocketScanResult | SemgrepScanResult | OSVScanResult | SlitherScanResult;
 
 			switch (tool) {
 				case 'snyk':
 					command = `cd ${this.projectRoot} && snyk test --json --fail-on=upgradable`;
-					result = JSON.parse(execSync(command, { encoding: 'utf8', timeout: 300000 }));
+					result = JSON.parse(execSync(command, { encoding: 'utf8', timeout: 300000 })) as SnykScanResult;
 					break;
 
 				case 'socket':
@@ -121,22 +178,22 @@ class SecurityBaselineManager {
 						return { vulnerabilities: [], summary: { total: 0 } };
 					}
 					command = `cd ${this.projectRoot} && socket scan --json`;
-					result = JSON.parse(execSync(command, { encoding: 'utf8', timeout: 300000 }));
+					result = JSON.parse(execSync(command, { encoding: 'utf8', timeout: 300000 })) as SocketScanResult;
 					break;
 
 				case 'semgrep':
 					command = `cd ${this.projectRoot} && semgrep --config=auto --json --disable-version-check`;
-					result = JSON.parse(execSync(command, { encoding: 'utf8', timeout: 300000 }));
+					result = JSON.parse(execSync(command, { encoding: 'utf8', timeout: 300000 })) as SemgrepScanResult;
 					break;
 
 				case 'osv-scanner':
 					command = `cd ${this.projectRoot} && osv-scanner --format=json --lockfile=yarn.lock`;
-					result = JSON.parse(execSync(command, { encoding: 'utf8', timeout: 300000 }));
+					result = JSON.parse(execSync(command, { encoding: 'utf8', timeout: 300000 })) as OSVScanResult;
 					break;
 
 				case 'slither':
 					command = `cd ${this.projectRoot}/contracts && slither --json --exclude-dependencies --exclude-informational .`;
-					result = JSON.parse(execSync(command, { encoding: 'utf8', timeout: 600000 }));
+					result = JSON.parse(execSync(command, { encoding: 'utf8', timeout: 600000 })) as SlitherScanResult;
 					break;
 
 				default:
@@ -145,40 +202,53 @@ class SecurityBaselineManager {
 			}
 
 			return result;
-		} catch (error: any) {
-			console.error(`❌ ${tool} scan failed:`, error.message);
+		} catch (error: unknown) {
+			const err = error as Error;
+			console.error(`❌ ${tool} scan failed:`, err.message);
 			throw error;
 		}
 	}
 
-	private analyzeScanResults(tool: string, results: any): ToolBaseline {
-		let vulnerabilities: any[] = [];
+	private analyzeScanResults(tool: string, results: SnykScanResult | SocketScanResult | SemgrepScanResult | OSVScanResult | SlitherScanResult | { vulnerabilities: unknown[]; summary: { total: number } }): ToolBaseline {
+		// Handle fallback case
+		if ('summary' in results) {
+			return {
+				version: this.toolsConfig.tools[tool]?.version || 'unknown',
+				config: this.toolsConfig.tools[tool]?.config || {},
+				expected_results: {
+					vulnerabilities: results.summary.total,
+					severity_breakdown: { low: 0, medium: 0, high: 0, critical: 0 },
+				},
+			};
+		}
+
+		let vulnerabilities: SnykVulnerability[] | SocketIssue[] | SemgrepFinding[] | OSVPackageResult[] | SlitherDetector[] = [];
 		let severityBreakdown: Record<string, number> = {};
 
 		switch (tool) {
 			case 'snyk':
-				vulnerabilities = results.vulnerabilities || [];
-				severityBreakdown = this.categorizeSnykSeverities(vulnerabilities);
+				vulnerabilities = (results as SnykScanResult).vulnerabilities || [];
+				severityBreakdown = this.categorizeSnykSeverities(vulnerabilities as SnykVulnerability[]);
 				break;
 
 			case 'socket':
-				vulnerabilities = results.issues || [];
-				severityBreakdown = this.categorizeSocketSeverities(vulnerabilities);
+				vulnerabilities = (results as SocketScanResult).issues || [];
+				severityBreakdown = this.categorizeSocketSeverities(vulnerabilities as SocketIssue[]);
 				break;
 
 			case 'semgrep':
-				vulnerabilities = results.results || [];
-				severityBreakdown = this.categorizeSemgrepSeverities(vulnerabilities);
+				vulnerabilities = (results as SemgrepScanResult).results || [];
+				severityBreakdown = this.categorizeSemgrepSeverities(vulnerabilities as SemgrepFinding[]);
 				break;
 
 			case 'osv-scanner':
-				vulnerabilities = results.results || [];
-				severityBreakdown = this.categorizeOSVSeverities(vulnerabilities);
+				vulnerabilities = (results as OSVScanResult).results || [];
+				severityBreakdown = this.categorizeOSVSeverities(vulnerabilities as OSVPackageResult[]);
 				break;
 
 			case 'slither':
-				vulnerabilities = results.results?.detectors || [];
-				severityBreakdown = this.categorizeSlitherSeverities(vulnerabilities);
+				vulnerabilities = (results as SlitherScanResult).results?.detectors || [];
+				severityBreakdown = this.categorizeSlitherSeverities(vulnerabilities as SlitherDetector[]);
 				break;
 		}
 
@@ -192,7 +262,7 @@ class SecurityBaselineManager {
 		};
 	}
 
-	private categorizeSnykSeverities(vulnerabilities: any[]): Record<string, number> {
+	private categorizeSnykSeverities(vulnerabilities: SnykVulnerability[]): Record<string, number> {
 		const breakdown: Record<string, number> = { low: 0, medium: 0, high: 0, critical: 0 };
 		vulnerabilities.forEach((vuln) => {
 			const severity = vuln.severity?.toLowerCase() || 'medium';
@@ -201,37 +271,41 @@ class SecurityBaselineManager {
 		return breakdown;
 	}
 
-	private categorizeSocketSeverities(vulnerabilities: any[]): Record<string, number> {
+	private categorizeSocketSeverities(vulnerabilities: SocketIssue[]): Record<string, number> {
 		const breakdown: Record<string, number> = { low: 0, medium: 0, high: 0, critical: 0 };
-		vulnerabilities.forEach((vuln) => {
-			const severity = vuln.severity?.toLowerCase() || 'medium';
+		vulnerabilities.forEach((issue) => {
+			const severity = issue.severity?.toLowerCase() || 'medium';
 			breakdown[severity] = (breakdown[severity] || 0) + 1;
 		});
 		return breakdown;
 	}
 
-	private categorizeSemgrepSeverities(vulnerabilities: any[]): Record<string, number> {
+	private categorizeSemgrepSeverities(vulnerabilities: SemgrepFinding[]): Record<string, number> {
 		const breakdown: Record<string, number> = { low: 0, medium: 0, high: 0, critical: 0 };
-		vulnerabilities.forEach((vuln) => {
-			const severity = vuln.extra?.severity?.toLowerCase() || 'medium';
+		vulnerabilities.forEach((finding) => {
+			const severity = finding.extra?.severity?.toLowerCase() || 'medium';
 			breakdown[severity] = (breakdown[severity] || 0) + 1;
 		});
 		return breakdown;
 	}
 
-	private categorizeOSVSeverities(vulnerabilities: any[]): Record<string, number> {
+	private categorizeOSVSeverities(vulnerabilities: OSVPackageResult[]): Record<string, number> {
 		const breakdown: Record<string, number> = { low: 0, medium: 0, high: 0, critical: 0 };
-		vulnerabilities.forEach((vuln) => {
-			const severity = vuln.severity?.toLowerCase() || 'medium';
-			breakdown[severity] = (breakdown[severity] || 0) + 1;
+		vulnerabilities.forEach((result) => {
+			if (result.vulnerabilities) {
+				result.vulnerabilities.forEach((vuln) => {
+					const severity = vuln.severity?.toLowerCase() || 'medium';
+					breakdown[severity] = (breakdown[severity] || 0) + 1;
+				});
+			}
 		});
 		return breakdown;
 	}
 
-	private categorizeSlitherSeverities(vulnerabilities: any[]): Record<string, number> {
+	private categorizeSlitherSeverities(vulnerabilities: SlitherDetector[]): Record<string, number> {
 		const breakdown: Record<string, number> = { low: 0, medium: 0, high: 0, critical: 0 };
-		vulnerabilities.forEach((vuln) => {
-			const severity = vuln.impact?.toLowerCase() || 'medium';
+		vulnerabilities.forEach((detector) => {
+			const severity = detector.impact?.toLowerCase() || 'medium';
 			breakdown[severity] = (breakdown[severity] || 0) + 1;
 		});
 		return breakdown;

@@ -70,7 +70,7 @@ interface ValidationResult {
 
 class MultiChainTestRunner {
 	private forkManager: BlockchainForkManager;
-	private results: any[];
+	private results: AggregatedResults[];
 	private networks: string[];
 
 	constructor() {
