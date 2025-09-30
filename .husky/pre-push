@@ -20,33 +20,33 @@ remote="$1"
 url="$2"
 
 # Run comprehensive security checks
-echo "📋 Running security audit..."
+echo "📋 Running security audit (yarn npm audit --severity moderate)..."
 if ! yarn npm audit --severity moderate > /dev/null 2>&1; then
     echo "❌ Security audit failed. Please fix vulnerabilities before pushing."
     success=false
 fi
 
 # Run dependency vulnerability scans (skip if no auth)
-echo "🔍 Running dependency vulnerability scans..."
+echo "🔍 Running dependency vulnerability scans (yarn snyk:test)..."
 yarn snyk:test > /dev/null 2>&1 || echo "⚠️  Snyk scan skipped (authentication required)"
 ./bin/osv-scanner --lockfile=yarn.lock --format=json > /dev/null 2>&1 || echo "⚠️  OSV scan completed"
 
 # Run code security scanning
-echo "🔎 Running code security analysis..."
+echo "🔎 Running code security analysis (yarn semgrep:scan)..."
 if ! yarn semgrep:scan > /dev/null 2>&1; then
     echo "❌ Code security scan found issues. Please fix before pushing."
     success=false
 fi
 
 # Run Solidity static analysis with Slither
-echo "🐍 Running Solidity static analysis with Slither..."
+echo "🐍 Running Solidity static analysis with Slither (yarn slither:scan)..."
 if ! yarn slither:scan > /dev/null 2>&1; then
     echo "❌ Slither analysis found issues. Please fix before pushing."
     success=false
 fi
 
 # Run secret detection
-echo "🔑 Running secret detection..."
+echo "🔑 Running secret detection (yarn git-secrets:scan)..."
 if ! yarn git-secrets:scan > /dev/null 2>&1; then
     echo "❌ Secret detection found potential leaks. Please review before pushing."
     success=false
@@ -55,7 +55,7 @@ fi
 # Run tests if pushing to main/develop branches
 current_branch=$(git branch --show-current 2>/dev/null || git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 if [ "$current_branch" = "main" ] || [ "$current_branch" = "develop" ]; then
-    echo "🧪 Running tests for protected branch push..."
+    echo "🧪 Running tests for protected branch push (yarn test)..."
     if ! yarn test > /dev/null 2>&1; then
         echo "❌ Tests failed. Please fix tests before pushing to protected branch."
         success=false
