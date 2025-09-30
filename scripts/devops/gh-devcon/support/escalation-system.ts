@@ -10,7 +10,29 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import * as crypto from 'crypto';
 import { DevContainerKnowledgeBase } from './knowledge-base';
+
+interface DiagnosticResult {
+	status: 'PASS' | 'FAIL';
+	component: string;
+	message?: string;
+	details?: Record<string, unknown>;
+}
+
+interface KnowledgeBaseResult {
+	articleId: string;
+	relevance: number;
+	title: string;
+	solution?: string;
+}
+
+interface Resolution {
+	resolvedBy: string;
+	resolutionTier: number;
+	satisfactionScore?: number;
+	lessonsLearned: string[];
+}
 
 interface IssueContext {
 	issueId: string;
@@ -18,8 +40,8 @@ interface IssueContext {
 	userEmail: string;
 	userExperience: 'beginner' | 'intermediate' | 'advanced';
 	description: string;
-	diagnosticResults?: any[];
-	knowledgeBaseResults?: any[];
+	diagnosticResults?: DiagnosticResult[];
+	knowledgeBaseResults?: KnowledgeBaseResult[];
 	attemptedSolutions: string[];
 	timestamp: Date;
 	metadata: Record<string, any>;
@@ -371,19 +393,11 @@ Please investigate and provide resolution.`;
 		const availableMembers = teamMembers[tierKey] || ['unassigned'];
 
 		// Simple round-robin assignment (in real implementation, consider workload, expertise, etc.)
-		const assignedIndex = Math.floor(Math.random() * availableMembers.length);
+		const assignedIndex = crypto.randomInt(0, availableMembers.length);
 		return availableMembers[assignedIndex];
 	}
 
-	public async resolveIssue(
-		issueId: string,
-		resolution: {
-			resolvedBy: string;
-			resolutionTier: number;
-			satisfactionScore?: number;
-			lessonsLearned: string[];
-		},
-	): Promise<void> {
+	public async resolveIssue(issueId: string, resolution: Resolution): Promise<void> {
 		const record = this.activeEscalations.get(issueId);
 		if (!record) {
 			throw new Error(`No active escalation found for issue: ${issueId}`);
@@ -415,7 +429,7 @@ Please investigate and provide resolution.`;
 
 	private async updateKnowledgeBase(
 		record: EscalationRecord,
-		resolution: any,
+		resolution: Resolution,
 	): Promise<void> {
 		// Add lessons learned to knowledge base
 		for (const lesson of resolution.lessonsLearned) {
@@ -430,7 +444,8 @@ Please investigate and provide resolution.`;
 		// Analyze diagnostic results and user context to determine severity
 		if (context.diagnosticResults) {
 			const criticalFailures = context.diagnosticResults.filter(
-				(r: any) => r.status === 'FAIL' && this.isCriticalComponent(r.component),
+				(r: DiagnosticResult) =>
+					r.status === 'FAIL' && this.isCriticalComponent(r.component),
 			);
 			if (criticalFailures.length > 0) return 'critical';
 		}
@@ -522,7 +537,8 @@ Please investigate and provide resolution.`;
 	}
 
 	private generateRecordId(): string {
-		return 'ESC-' + Date.now().toString(36) + Math.random().toString(36).substr(2);
+		const randomBytes = crypto.randomBytes(4);
+		return 'ESC-' + Date.now().toString(36) + randomBytes.toString('hex');
 	}
 
 	public getEscalationStats(): {

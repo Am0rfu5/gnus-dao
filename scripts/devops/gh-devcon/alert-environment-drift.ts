@@ -22,6 +22,28 @@ interface AlertHistory {
 	error?: string;
 }
 
+interface DriftAnalysis {
+	timestamp: string;
+	drift_detected: boolean;
+	drift_level: 'none' | 'low' | 'medium' | 'high' | 'critical';
+	changes_since_baseline: number;
+	critical_changes: number;
+	warning_changes: number;
+	info_changes: number;
+	comparison_result: unknown;
+	recommendations: string[];
+	alert_required: boolean;
+	alert_message?: string;
+}
+
+interface AlertStats {
+	total_alerts: number;
+	successful_alerts: number;
+	failed_alerts: number;
+	alerts_by_level: Record<string, number>;
+	alerts_by_type: Record<string, number>;
+}
+
 class EnvironmentDriftAlerter {
 	private config: AlertConfig;
 	private history: AlertHistory[] = [];
@@ -32,9 +54,12 @@ class EnvironmentDriftAlerter {
 		this.loadHistory();
 	}
 
-	async alertDrift(analysis: any): Promise<boolean> {
-		// Check if alert level is configured
-		if (!this.config.alert_levels.includes(analysis.drift_level)) {
+	async alertDrift(analysis: DriftAnalysis): Promise<boolean> {
+		// Check if alert level is configured (skip 'none' level)
+		if (
+			analysis.drift_level === 'none' ||
+			!this.config.alert_levels.includes(analysis.drift_level)
+		) {
 			console.log(
 				`ℹ️  Skipping alert for ${analysis.drift_level} level drift (not in configured levels)`,
 			);
@@ -106,7 +131,7 @@ class EnvironmentDriftAlerter {
 		return alertHistory.success;
 	}
 
-	private async sendWebhookAlert(analysis: any): Promise<void> {
+	private async sendWebhookAlert(analysis: DriftAnalysis): Promise<void> {
 		const payload = {
 			alert_type: 'environment_drift',
 			severity: analysis.drift_level,
@@ -127,7 +152,7 @@ class EnvironmentDriftAlerter {
 		console.log('Webhook payload:', JSON.stringify(payload, null, 2));
 	}
 
-	private async sendSlackAlert(analysis: any): Promise<void> {
+	private async sendSlackAlert(analysis: DriftAnalysis): Promise<void> {
 		const blocks = [
 			{
 				type: 'header',
@@ -165,7 +190,7 @@ class EnvironmentDriftAlerter {
 		console.log('Slack payload:', JSON.stringify(payload, null, 2));
 	}
 
-	private async sendTeamsAlert(analysis: any): Promise<void> {
+	private async sendTeamsAlert(analysis: DriftAnalysis): Promise<void> {
 		const card = {
 			type: 'message',
 			attachments: [
@@ -218,7 +243,7 @@ class EnvironmentDriftAlerter {
 		console.log('Teams payload:', JSON.stringify(card, null, 2));
 	}
 
-	private async sendEmailAlerts(analysis: any): Promise<void> {
+	private async sendEmailAlerts(analysis: DriftAnalysis): Promise<void> {
 		const subject = `🚨 Environment Drift Alert: ${analysis.drift_level.toUpperCase()} Level`;
 		const htmlBody = this.generateEmailHTML(analysis);
 		const textBody = this.generateEmailText(analysis);
@@ -232,7 +257,7 @@ class EnvironmentDriftAlerter {
 		}
 	}
 
-	private generateEmailHTML(analysis: any): string {
+	private generateEmailHTML(analysis: DriftAnalysis): string {
 		return `
 <!DOCTYPE html>
 <html>
@@ -285,7 +310,7 @@ class EnvironmentDriftAlerter {
 		`.trim();
 	}
 
-	private generateEmailText(analysis: any): string {
+	private generateEmailText(analysis: DriftAnalysis): string {
 		return `
 🚨 ENVIRONMENT DRIFT ALERT 🚨
 
@@ -335,7 +360,7 @@ For more details, check the environment monitoring dashboard.
 		return limit ? entries.slice(0, limit) : entries;
 	}
 
-	getAlertStats(): any {
+	getAlertStats(): AlertStats {
 		const stats = {
 			total_alerts: this.history.length,
 			successful_alerts: this.history.filter((h) => h.success).length,
@@ -405,14 +430,17 @@ if (require.main === module) {
 
 		case 'test':
 			// Generate a test alert
-			const testAnalysis = {
+			const testAnalysis: DriftAnalysis = {
 				timestamp: new Date().toISOString(),
+				drift_detected: true,
 				drift_level: 'high',
 				changes_since_baseline: 5,
 				critical_changes: 1,
 				warning_changes: 3,
 				info_changes: 1,
+				comparison_result: {},
 				recommendations: ['Test recommendation 1', 'Test recommendation 2'],
+				alert_required: true,
 			};
 
 			alerter.alertDrift(testAnalysis).then((success) => {

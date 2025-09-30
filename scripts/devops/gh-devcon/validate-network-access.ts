@@ -274,10 +274,13 @@ class NetworkAccessValidator {
 	private async resolveDNS(url: string): Promise<string> {
 		return new Promise((resolve, reject) => {
 			const hostname = new URL(url).hostname;
-			require('dns').lookup(hostname, (err: any, address: string) => {
-				if (err) reject(err);
-				else resolve(address);
-			});
+			require('dns').lookup(
+				hostname,
+				(err: NodeJS.ErrnoException | null, address: string) => {
+					if (err) reject(err);
+					else resolve(address);
+				},
+			);
 		});
 	}
 

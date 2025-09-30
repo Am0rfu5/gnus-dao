@@ -1,10 +1,12 @@
 // scripts/devops/gh-devcon/detect-environment-drift.ts
 import * as fs from 'fs';
 import * as path from 'path';
-import EnvironmentFingerprinter from './fingerprint-environment';
-import EnvironmentComparator from './compare-environments';
+import EnvironmentFingerprinter, {
+	EnvironmentFingerprint,
+} from './fingerprint-environment';
+import EnvironmentComparator, { ComparisonResult } from './compare-environments';
 
-interface DriftAnalysis {
+export interface DriftAnalysis {
 	timestamp: string;
 	drift_detected: boolean;
 	drift_level: 'none' | 'low' | 'medium' | 'high' | 'critical';
@@ -12,7 +14,7 @@ interface DriftAnalysis {
 	critical_changes: number;
 	warning_changes: number;
 	info_changes: number;
-	comparison_result: any;
+	comparison_result?: ComparisonResult;
 	recommendations: string[];
 	alert_required: boolean;
 	alert_message?: string;
@@ -20,11 +22,13 @@ interface DriftAnalysis {
 
 class EnvironmentDriftDetector {
 	private baselineFile: string;
-	private currentFingerprint: any;
-	private comparisonResult: any;
+	private currentFingerprint: EnvironmentFingerprint | null;
+	private comparisonResult: ComparisonResult | null;
 
 	constructor(baselineFile: string = 'environment-baseline.json') {
 		this.baselineFile = baselineFile;
+		this.currentFingerprint = null;
+		this.comparisonResult = null;
 	}
 
 	async detectDrift(): Promise<DriftAnalysis> {
@@ -38,7 +42,6 @@ class EnvironmentDriftDetector {
 			critical_changes: 0,
 			warning_changes: 0,
 			info_changes: 0,
-			comparison_result: null,
 			recommendations: [],
 			alert_required: false,
 		};
@@ -156,37 +159,39 @@ class EnvironmentDriftDetector {
 		}
 
 		// Category-specific recommendations
-		const criticalCategories = Array.from(
-			new Set(analysis.comparison_result.critical_differences.map((d: any) => d.category)),
-		);
-		const warningCategories = Array.from(
-			new Set(analysis.comparison_result.warnings.map((d: any) => d.category)),
-		);
-
-		if (criticalCategories.includes('tools')) {
-			recommendations.push(
-				'🔧 Critical tool version mismatch - update DevContainer dependencies',
+		if (analysis.comparison_result) {
+			const criticalCategories = Array.from(
+				new Set(analysis.comparison_result.critical_differences.map((d) => d.category)),
 			);
-		}
-
-		if (criticalCategories.includes('runtime')) {
-			recommendations.push(
-				'⚙️  Runtime version mismatch - update Node.js/npm/yarn versions',
+			const warningCategories = Array.from(
+				new Set(analysis.comparison_result.warnings.map((d) => d.category)),
 			);
-		}
 
-		if (criticalCategories.includes('system')) {
-			recommendations.push('🖥️  System configuration mismatch - review container setup');
-		}
+			if (criticalCategories.includes('tools')) {
+				recommendations.push(
+					'🔧 Critical tool version mismatch - update DevContainer dependencies',
+				);
+			}
 
-		if (warningCategories.includes('performance')) {
-			recommendations.push('🚀 Performance characteristics changed - monitor for impact');
-		}
+			if (criticalCategories.includes('runtime')) {
+				recommendations.push(
+					'⚙️  Runtime version mismatch - update Node.js/npm/yarn versions',
+				);
+			}
 
-		if (warningCategories.includes('network')) {
-			recommendations.push(
-				'🌐 Network configuration changed - verify external service access',
-			);
+			if (criticalCategories.includes('system')) {
+				recommendations.push('🖥️  System configuration mismatch - review container setup');
+			}
+
+			if (warningCategories.includes('performance')) {
+				recommendations.push('🚀 Performance characteristics changed - monitor for impact');
+			}
+
+			if (warningCategories.includes('network')) {
+				recommendations.push(
+					'🌐 Network configuration changed - verify external service access',
+				);
+			}
 		}
 
 		return recommendations;
@@ -204,9 +209,9 @@ class EnvironmentDriftDetector {
 		message += `Critical changes: ${analysis.critical_changes}\n`;
 		message += `Warning changes: ${analysis.warning_changes}\n\n`;
 
-		if (analysis.critical_changes > 0) {
+		if (analysis.critical_changes > 0 && analysis.comparison_result) {
 			message += '🚨 Critical Issues:\n';
-			analysis.comparison_result.critical_differences.slice(0, 3).forEach((diff: any) => {
+			analysis.comparison_result.critical_differences.slice(0, 3).forEach((diff) => {
 				message += `  - ${diff.message}\n`;
 			});
 			if (analysis.comparison_result.critical_differences.length > 3) {
@@ -244,9 +249,11 @@ class EnvironmentDriftDetector {
 		}
 	}
 
-	getBaselineInfo(): any {
+	getBaselineInfo(): EnvironmentFingerprint | null {
 		if (fs.existsSync(this.baselineFile)) {
-			return JSON.parse(fs.readFileSync(this.baselineFile, 'utf8'));
+			return JSON.parse(
+				fs.readFileSync(this.baselineFile, 'utf8'),
+			) as EnvironmentFingerprint;
 		}
 		return null;
 	}

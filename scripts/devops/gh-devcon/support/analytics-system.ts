@@ -10,6 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import * as crypto from 'crypto';
 
 interface FeedbackEntry {
 	feedbackId: string;
@@ -66,6 +67,17 @@ interface AdoptionMetrics {
 	};
 }
 
+interface UsageMetrics {
+	activeUsers: number;
+	sessionDuration: number;
+	errorRate: number;
+	featureUsage: {
+		diagnostics: number;
+		knowledgeBase: number;
+		escalation: number;
+	};
+}
+
 interface AnalyticsDashboard {
 	generatedAt: Date;
 	period: string;
@@ -107,9 +119,9 @@ class DevContainerAnalyticsSystem {
 		if (fs.existsSync(feedbackFile)) {
 			try {
 				this.feedbackEntries = JSON.parse(fs.readFileSync(feedbackFile, 'utf8')).map(
-					(entry: any) => ({
-						...entry,
-						timestamp: new Date(entry.timestamp),
+					(entry: unknown) => ({
+						...(entry as FeedbackEntry),
+						timestamp: new Date((entry as FeedbackEntry).timestamp),
 					}),
 				);
 			} catch (error) {
@@ -289,7 +301,7 @@ class DevContainerAnalyticsSystem {
 		}
 	}
 
-	private async getRecentUsageMetrics(): Promise<any> {
+	private async getRecentUsageMetrics(): Promise<UsageMetrics> {
 		// Get recent usage data
 		// In a real implementation, this would query usage analytics
 		return {
@@ -305,7 +317,7 @@ class DevContainerAnalyticsSystem {
 	}
 
 	private inferFeedbackFromUsage(
-		usage: any,
+		usage: UsageMetrics,
 	): Omit<FeedbackEntry, 'feedbackId' | 'timestamp' | 'sentiment'>[] {
 		const feedback: Omit<FeedbackEntry, 'feedbackId' | 'timestamp' | 'sentiment'>[] = [];
 
@@ -762,7 +774,8 @@ class DevContainerAnalyticsSystem {
 	}
 
 	private generateFeedbackId(): string {
-		return 'FB-' + Date.now().toString(36) + Math.random().toString(36).substr(2);
+		const randomBytes = crypto.randomBytes(4);
+		return 'FB-' + Date.now().toString(36) + randomBytes.toString('hex');
 	}
 
 	public cleanup(): void {

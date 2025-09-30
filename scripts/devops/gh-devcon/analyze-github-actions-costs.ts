@@ -2,6 +2,15 @@
 
 import { readFileSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
+import { randomInt } from 'crypto';
+
+interface WorkflowRun {
+	id: string | number;
+	workflow_name: string;
+	created_at: string;
+	duration_minutes: number;
+	repository?: string;
+}
 
 interface GitHubActionsUsage {
 	total_minutes: number;
@@ -173,7 +182,7 @@ class GitHubActionsCostAnalyzer {
 		}
 	}
 
-	private getWorkflowRunData(periodDays: number): any[] {
+	private getWorkflowRunData(periodDays: number): WorkflowRun[] {
 		try {
 			// Try to get real workflow data from GitHub CLI or API
 			const command = `gh run list --limit 100 --json databaseId,workflowName,createdAt,updatedAt,status,duration --jq '.[] | select(.status == "completed") | {id: .databaseId, workflow_name: .workflowName, created_at: .createdAt, duration_minutes: (.duration / 60)}'`;
@@ -185,7 +194,7 @@ class GitHubActionsCostAnalyzer {
 			const cutoffDate = new Date();
 			cutoffDate.setDate(cutoffDate.getDate() - periodDays);
 
-			return runs.filter((run: any) => new Date(run.created_at) >= cutoffDate);
+			return runs.filter((run: WorkflowRun) => new Date(run.created_at) >= cutoffDate);
 		} catch (error) {
 			console.warn('Could not get real workflow data, using mock data');
 			return this.getMockWorkflowRuns();
@@ -227,7 +236,7 @@ class GitHubActionsCostAnalyzer {
 		};
 	}
 
-	private getMockWorkflowRuns(): any[] {
+	private getMockWorkflowRuns(): WorkflowRun[] {
 		const runs = [];
 		const now = new Date();
 
@@ -240,7 +249,7 @@ class GitHubActionsCostAnalyzer {
 				workflow_name:
 					i % 3 === 0 ? 'DevContainer CI' : i % 3 === 1 ? 'Security Scan' : 'Parallel Test',
 				created_at: date.toISOString(),
-				duration_minutes: Math.random() * 20 + 5, // 5-25 minutes
+				duration_minutes: randomInt(5, 26), // 5-25 minutes
 			});
 		}
 
@@ -256,7 +265,14 @@ class GitHubActionsCostAnalyzer {
 	}
 
 	private calculateWorkflowCosts(usage: GitHubActionsUsage) {
-		const workflowCosts: { [workflow: string]: any } = {};
+		const workflowCosts: {
+			[workflow: string]: {
+				cost: number;
+				minutes: number;
+				runs: number;
+				average_cost_per_run: number;
+			};
+		} = {};
 
 		for (const repo of Object.values(usage.repositories)) {
 			for (const [workflowName, workflowData] of Object.entries(repo.workflows)) {

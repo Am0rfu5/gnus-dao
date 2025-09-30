@@ -4,11 +4,17 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 import * as crypto from 'crypto';
 
+interface ConfigurationSchema {
+	required_fields?: string[];
+	recommended_fields?: string[];
+	required_patterns?: string[];
+}
+
 interface ConfigurationFile {
 	name: string;
 	path: string;
 	required: boolean;
-	schema?: any;
+	schema?: ConfigurationSchema;
 	checksum?: string;
 	last_modified?: string;
 	valid: boolean;
@@ -30,8 +36,34 @@ interface ConfigurationValidation {
 	recommendations: string[];
 }
 
+interface PackageJsonData {
+	name?: string;
+	version?: string;
+	scripts?: Record<string, string>;
+	dependencies?: Record<string, string>;
+	devDependencies?: Record<string, string>;
+	[key: string]: unknown;
+}
+
+interface TsconfigJsonData {
+	compilerOptions?: {
+		strict?: boolean;
+		esModuleInterop?: boolean;
+		[key: string]: unknown;
+	};
+	include?: string[];
+	exclude?: string[];
+	files?: string[];
+	[key: string]: unknown;
+}
+
+type ConfigFileEntry = {
+	required: boolean;
+	schema?: ConfigurationSchema;
+};
+
 class ConfigurationValidator {
-	private configFiles: { [key: string]: any } = {
+	private configFiles: Record<string, ConfigFileEntry> = {
 		// Core project files
 		'package.json': {
 			required: true,
@@ -179,7 +211,7 @@ class ConfigurationValidator {
 
 	private async validateConfigurationFile(
 		fileName: string,
-		config: any,
+		config: ConfigFileEntry,
 	): Promise<ConfigurationFile> {
 		const result: ConfigurationFile = {
 			name: fileName,
@@ -219,7 +251,7 @@ class ConfigurationValidator {
 	private async validateFileContent(
 		fileName: string,
 		content: Buffer,
-		config: any,
+		config: ConfigFileEntry,
 		result: ConfigurationFile,
 	): Promise<void> {
 		const contentStr = content.toString();
@@ -246,10 +278,10 @@ class ConfigurationValidator {
 	private async validateJsonFile(
 		fileName: string,
 		content: string,
-		config: any,
+		config: ConfigFileEntry,
 		result: ConfigurationFile,
 	): Promise<void> {
-		let jsonData: any;
+		let jsonData: unknown;
 
 		try {
 			jsonData = JSON.parse(content);
@@ -262,7 +294,7 @@ class ConfigurationValidator {
 		// Check required fields
 		if (config.schema?.required_fields) {
 			for (const field of config.schema.required_fields) {
-				if (!(field in jsonData)) {
+				if (typeof jsonData === 'object' && jsonData !== null && !(field in jsonData)) {
 					result.errors.push(`Missing required field: ${field}`);
 					result.valid = false;
 				}
@@ -272,7 +304,7 @@ class ConfigurationValidator {
 		// Check recommended fields
 		if (config.schema?.recommended_fields) {
 			for (const field of config.schema.recommended_fields) {
-				if (!(field in jsonData)) {
+				if (typeof jsonData === 'object' && jsonData !== null && !(field in jsonData)) {
 					result.warnings.push(`Missing recommended field: ${field}`);
 				}
 			}
@@ -280,9 +312,9 @@ class ConfigurationValidator {
 
 		// File-specific validations
 		if (fileName === 'package.json') {
-			this.validatePackageJson(jsonData, result);
+			this.validatePackageJson(jsonData as PackageJsonData, result);
 		} else if (fileName === 'tsconfig.json') {
-			this.validateTsconfigJson(jsonData, result);
+			this.validateTsconfigJson(jsonData as TsconfigJsonData, result);
 		} else if (fileName === 'hardhat.config.ts') {
 			// Note: hardhat.config.ts is actually TypeScript, not JSON
 			// This will be handled by the JS validation
@@ -292,7 +324,7 @@ class ConfigurationValidator {
 	private async validateJsFile(
 		fileName: string,
 		content: string,
-		config: any,
+		config: ConfigFileEntry,
 		result: ConfigurationFile,
 	): Promise<void> {
 		// Basic syntax check by attempting to parse
@@ -330,7 +362,7 @@ class ConfigurationValidator {
 	private async validateDockerfile(
 		fileName: string,
 		content: string,
-		config: any,
+		config: ConfigFileEntry,
 		result: ConfigurationFile,
 	): Promise<void> {
 		const lines = content.split('\n');
@@ -354,7 +386,7 @@ class ConfigurationValidator {
 	private async validateYamlFile(
 		fileName: string,
 		content: string,
-		config: any,
+		config: ConfigFileEntry,
 		result: ConfigurationFile,
 	): Promise<void> {
 		// Basic YAML validation (check if it can be parsed)
@@ -392,7 +424,7 @@ class ConfigurationValidator {
 	private validateGenericFile(
 		fileName: string,
 		content: string,
-		config: any,
+		config: ConfigFileEntry,
 		result: ConfigurationFile,
 	): void {
 		// Basic checks for any file
@@ -408,7 +440,7 @@ class ConfigurationValidator {
 		}
 	}
 
-	private validatePackageJson(data: any, result: ConfigurationFile): void {
+	private validatePackageJson(data: PackageJsonData, result: ConfigurationFile): void {
 		// Check for security-related scripts
 		const securityScripts = ['audit', 'security-check', 'lint'];
 		const hasSecurityScripts = securityScripts.some(
@@ -430,7 +462,7 @@ class ConfigurationValidator {
 		}
 	}
 
-	private validateTsconfigJson(data: any, result: ConfigurationFile): void {
+	private validateTsconfigJson(data: TsconfigJsonData, result: ConfigurationFile): void {
 		// Check TypeScript configuration
 		const compilerOptions = data.compilerOptions || {};
 

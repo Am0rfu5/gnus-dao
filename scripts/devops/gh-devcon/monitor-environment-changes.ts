@@ -1,7 +1,7 @@
 // scripts/devops/gh-devcon/monitor-environment-changes.ts
 import * as fs from 'fs';
 import * as path from 'path';
-import EnvironmentDriftDetector from './detect-environment-drift';
+import EnvironmentDriftDetector, { DriftAnalysis } from './detect-environment-drift';
 
 interface MonitoringConfig {
 	interval_minutes: number;
@@ -15,9 +15,17 @@ interface MonitoringConfig {
 
 interface MonitoringEntry {
 	timestamp: string;
-	drift_analysis: any;
+	drift_analysis: DriftAnalysis;
 	alert_sent: boolean;
 	alert_type?: string;
+}
+
+interface MonitoringStatus {
+	is_running: boolean;
+	config: MonitoringConfig;
+	last_check: MonitoringEntry | null;
+	total_checks: number;
+	alerts_sent: number;
 }
 
 class EnvironmentMonitor {
@@ -101,7 +109,7 @@ class EnvironmentMonitor {
 		}
 	}
 
-	private shouldAlert(analysis: any): boolean {
+	private shouldAlert(analysis: DriftAnalysis): boolean {
 		const levels = ['low', 'medium', 'high', 'critical'];
 		const thresholdIndex = levels.indexOf(this.config.alert_threshold);
 		const currentIndex = levels.indexOf(analysis.drift_level);
@@ -109,7 +117,7 @@ class EnvironmentMonitor {
 		return currentIndex >= thresholdIndex && analysis.drift_detected;
 	}
 
-	private async sendAlert(analysis: any): Promise<boolean> {
+	private async sendAlert(analysis: DriftAnalysis): Promise<boolean> {
 		console.log(`🚨 Sending alert for ${analysis.drift_level} level drift`);
 
 		let success = false;
@@ -137,7 +145,7 @@ class EnvironmentMonitor {
 		return success;
 	}
 
-	private async sendWebhookAlert(analysis: any): Promise<boolean> {
+	private async sendWebhookAlert(analysis: DriftAnalysis): Promise<boolean> {
 		try {
 			const payload = {
 				text: `Environment Drift Alert: ${analysis.drift_level.toUpperCase()}`,
@@ -190,7 +198,7 @@ class EnvironmentMonitor {
 		}
 	}
 
-	private async sendEmailAlert(analysis: any): Promise<void> {
+	private async sendEmailAlert(analysis: DriftAnalysis): Promise<void> {
 		const subject = `Environment Drift Alert: ${analysis.drift_level.toUpperCase()} Level`;
 		const body = `
 Environment Drift Detected
@@ -210,7 +218,7 @@ This is an automated alert from the GNUS-DAO environment monitoring system.
 		console.log('📧 Email alert:', { to: this.config.alert_email, subject, body });
 	}
 
-	private logCheck(analysis: any, alertSent: boolean): void {
+	private logCheck(analysis: DriftAnalysis, alertSent: boolean): void {
 		const logEntry = {
 			timestamp: new Date().toISOString(),
 			drift_level: analysis.drift_level,
@@ -258,7 +266,7 @@ This is an automated alert from the GNUS-DAO environment monitoring system.
 		}
 	}
 
-	getStatus(): any {
+	getStatus(): MonitoringStatus {
 		return {
 			is_running: this.isRunning,
 			config: this.config,

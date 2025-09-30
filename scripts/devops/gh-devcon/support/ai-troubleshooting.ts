@@ -10,6 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import * as crypto from 'crypto';
 import { DevContainerKnowledgeBase } from './knowledge-base';
 import { DevContainerEscalationSystem } from './escalation-system';
 
@@ -19,7 +20,7 @@ interface DiagnosticResult {
 	status: 'PASS' | 'FAIL' | 'WARN';
 	component: string;
 	message: string;
-	details?: any;
+	details?: Record<string, unknown>;
 	severity: 'low' | 'medium' | 'high' | 'critical';
 	recommendations: string[];
 }
@@ -311,9 +312,9 @@ class DevContainerAITroubleshooting {
 		if (fs.existsSync(historyFile)) {
 			try {
 				this.diagnosticHistory = JSON.parse(fs.readFileSync(historyFile, 'utf8')).map(
-					(result: any) => ({
-						...result,
-						timestamp: new Date(result.timestamp),
+					(result: unknown) => ({
+						...(result as DiagnosticResult),
+						timestamp: new Date((result as DiagnosticResult).timestamp),
 					}),
 				);
 			} catch (error) {
@@ -998,7 +999,7 @@ class DevContainerAITroubleshooting {
 	}
 
 	private generateSessionId(): string {
-		return 'TS-' + Date.now().toString(36) + Math.random().toString(36).substr(2);
+		return 'TS-' + Date.now().toString(36) + crypto.randomInt(1000000).toString(36);
 	}
 }
 

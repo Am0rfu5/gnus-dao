@@ -3,14 +3,21 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 import * as readline from 'readline';
 
+interface CompletedStep {
+	id: string;
+	title: string;
+	result: unknown;
+	completedAt: string;
+}
+
 class InteractiveDevContainerWalkthrough {
 	private rl: readline.Interface;
 	private progress: {
 		currentStep: number;
 		totalSteps: number;
-		completedSteps: any[];
+		completedSteps: CompletedStep[];
 		startTime: number;
-		userResponses: { [key: string]: any };
+		userResponses: Record<string, unknown>;
 	};
 
 	private steps: Array<{
@@ -176,7 +183,7 @@ class InteractiveDevContainerWalkthrough {
 			},
 		];
 
-		const results: { [key: string]: any } = {};
+		const results: Record<string, unknown> = {};
 		let allPassed = true;
 
 		for (const check of checks) {
@@ -198,7 +205,7 @@ class InteractiveDevContainerWalkthrough {
 		if (!allPassed) {
 			console.log('\n📋 Please install missing prerequisites:');
 			Object.entries(results).forEach(([name, result]) => {
-				if (!result.passed) {
+				if (!(result as { passed: boolean }).passed) {
 					console.log(`   • ${name}: ${this.getInstallInstructions(name)}`);
 				}
 			});
@@ -281,7 +288,7 @@ class InteractiveDevContainerWalkthrough {
 			},
 		];
 
-		const results: { [key: string]: any } = {};
+		const results: Record<string, unknown> = {};
 		for (const test of tests) {
 			try {
 				const output = execSync(test.command, { encoding: 'utf8', stdio: 'pipe' });
@@ -319,7 +326,7 @@ class InteractiveDevContainerWalkthrough {
 			},
 		];
 
-		const results: { [key: string]: any } = {};
+		const results: Record<string, unknown> = {};
 		for (const step of steps) {
 			console.log(`⏳ ${step.name}...`);
 

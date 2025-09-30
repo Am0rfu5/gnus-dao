@@ -19,21 +19,63 @@ interface ReproducibilityResults {
 	};
 }
 
-interface IterationResult {
-	iteration: number;
-	timestamp: string;
-	environment_fingerprint: any;
-	build_artifacts: any;
-	performance_metrics: any;
-	docker_compatibility?: any;
-	errors: ErrorInfo[];
-	duration_seconds: number;
-}
-
 interface ErrorInfo {
 	stage: string;
 	error: string;
 	stack?: string;
+}
+
+interface IterationResult {
+	iteration: number;
+	timestamp: string;
+	environment_fingerprint: EnvironmentFingerprint | { error: string; hash: string } | null;
+	build_artifacts: BuildArtifacts;
+	performance_metrics: PerformanceMetrics;
+	docker_compatibility?: DockerCompatibility;
+	errors: ErrorInfo[];
+	duration_seconds: number;
+}
+
+interface EnvironmentFingerprint {
+	timestamp: string;
+	node_version: string;
+	platform: string;
+	arch: string;
+	hostname: string;
+	cpus: number;
+	total_memory: number;
+	environment_type: string;
+	env_hash: string;
+	hash?: string;
+}
+
+interface BuildArtifacts {
+	contracts?: Record<string, unknown>;
+	typechain?: Record<string, unknown>;
+	compile_skipped?: boolean;
+	cache_used?: boolean;
+	compile_time?: number;
+	error?: string;
+}
+
+interface PerformanceMetrics {
+	cpu_iterations_per_ms: number;
+	cpu_time_ns: number;
+	memory_heap_used: number;
+	memory_heap_total: number;
+	io_time_ns?: number;
+	error?: string;
+}
+
+interface DockerCompatibility {
+	version?: string;
+	compatible?: boolean;
+	issues?: string[];
+	available?: boolean;
+	note?: string;
+	container_test?: boolean;
+	devcontainer_config?: boolean;
+	error?: string;
 }
 
 interface TestOptions {
@@ -48,7 +90,7 @@ interface TestOptions {
 class ReproducibilityTester {
 	private results: ReproducibilityResults;
 	private firstIteration: boolean = true;
-	private cachedArtifacts: any = {};
+	private cachedArtifacts: Partial<BuildArtifacts> = {};
 	private startTime: number = Date.now();
 
 	constructor() {
@@ -133,7 +175,12 @@ class ReproducibilityTester {
 			timestamp: new Date().toISOString(),
 			environment_fingerprint: null,
 			build_artifacts: {},
-			performance_metrics: {},
+			performance_metrics: {
+				cpu_iterations_per_ms: 0,
+				cpu_time_ns: 0,
+				memory_heap_used: 0,
+				memory_heap_total: 0,
+			},
 			errors: [],
 			duration_seconds: 0,
 		};
@@ -175,10 +222,12 @@ class ReproducibilityTester {
 		return iteration;
 	}
 
-	async generateFingerprint(): Promise<any> {
+	async generateFingerprint(): Promise<
+		EnvironmentFingerprint | { error: string; hash: string }
+	> {
 		try {
 			// Fast, simple fingerprint for reproducibility testing
-			const fingerprint: any = {
+			const fingerprint: EnvironmentFingerprint = {
 				timestamp: new Date().toISOString(),
 				node_version: process.version,
 				platform: process.platform,
@@ -222,8 +271,8 @@ class ReproducibilityTester {
 		skipFullCompile: boolean,
 		quickMode: boolean,
 		timeoutSeconds: number,
-	): Promise<any> {
-		const artifacts: any = {};
+	): Promise<BuildArtifacts> {
+		const artifacts: BuildArtifacts = {};
 
 		try {
 			// Only do full compilation on first iteration, incremental on others (unless skipped)
@@ -288,8 +337,13 @@ class ReproducibilityTester {
 		return artifacts;
 	}
 
-	async measurePerformance(): Promise<any> {
-		const metrics: any = {};
+	async measurePerformance(): Promise<PerformanceMetrics> {
+		const metrics: PerformanceMetrics = {
+			cpu_iterations_per_ms: 0,
+			cpu_time_ns: 0,
+			memory_heap_used: 0,
+			memory_heap_total: 0,
+		};
 
 		try {
 			// Faster CPU benchmark (reduced duration)
@@ -299,7 +353,7 @@ class ReproducibilityTester {
 
 			const startTime = Date.now();
 			while (Date.now() - startTime < benchmarkDuration) {
-				Math.sqrt(Math.random() * 1000000);
+				Math.sqrt(crypto.randomInt(1000000));
 				iterations++;
 			}
 			const cpuEnd = process.hrtime.bigint();
@@ -328,8 +382,8 @@ class ReproducibilityTester {
 		return metrics;
 	}
 
-	async testDockerCompatibility(): Promise<any> {
-		const dockerResults: any = {};
+	async testDockerCompatibility(): Promise<DockerCompatibility> {
+		const dockerResults: DockerCompatibility = {};
 
 		try {
 			// Check if Docker is available by trying to get version
@@ -369,8 +423,8 @@ class ReproducibilityTester {
 		return dockerResults;
 	}
 
-	hashDirectory(dirPath: string): any {
-		const hashes: any = {};
+	hashDirectory(dirPath: string): Record<string, unknown> {
+		const hashes: Record<string, unknown> = {};
 
 		try {
 			const files = this.getAllFiles(dirPath);
@@ -388,8 +442,11 @@ class ReproducibilityTester {
 		return hashes;
 	}
 
-	hashDirectoryOptimized(dirPath: string, quickMode: boolean = false): any {
-		const hashes: any = {};
+	hashDirectoryOptimized(
+		dirPath: string,
+		quickMode: boolean = false,
+	): Record<string, unknown> {
+		const hashes: Record<string, unknown> = {};
 
 		try {
 			const files = this.getAllFiles(dirPath);
@@ -534,25 +591,29 @@ class ReproducibilityTester {
 		};
 	}
 
-	checkArtifactConsistency(artifacts: any[]): boolean {
+	checkArtifactConsistency(artifacts: BuildArtifacts[]): boolean {
 		if (artifacts.length < 2) return true;
 
 		// Compare contract artifacts
-		const contractHashes = artifacts.map((a: any) => a.contracts).filter(Boolean);
+		const contractHashes = artifacts
+			.map((a: BuildArtifacts) => a.contracts)
+			.filter(Boolean) as Record<string, unknown>[];
 		if (contractHashes.length > 1) {
 			const firstHash = JSON.stringify(contractHashes[0]);
-			return contractHashes.every((hash: any) => JSON.stringify(hash) === firstHash);
+			return contractHashes.every(
+				(hash: Record<string, unknown>) => JSON.stringify(hash) === firstHash,
+			);
 		}
 
 		return true;
 	}
 
-	checkPerformanceConsistency(performances: any[]): boolean {
+	checkPerformanceConsistency(performances: PerformanceMetrics[]): boolean {
 		if (performances.length < 2) return true;
 
 		// Check CPU performance variation
 		const cpuPerformances = performances
-			.map((p: any) => p.cpu_iterations_per_ms)
+			.map((p: PerformanceMetrics) => p.cpu_iterations_per_ms)
 			.filter(Boolean);
 		if (cpuPerformances.length > 1) {
 			const avg =

@@ -174,7 +174,9 @@ class EnvironmentPerformanceBenchmark {
 			const endTime = startTime + BigInt(this.TEST_DURATION_MS * 1000000);
 			while (process.hrtime.bigint() < endTime) {
 				// Allocate and manipulate memory
-				const array = new Array(10000).fill(0).map((_, idx) => idx * Math.random());
+				const array = new Array(10000)
+					.fill(0)
+					.map((_, idx) => idx * (crypto.randomInt(0, 1000000) / 1000000));
 				array.sort((a, b) => a - b);
 				array.reverse();
 				operations++;
@@ -283,7 +285,9 @@ class EnvironmentPerformanceBenchmark {
 			// Allocate objects to trigger GC
 			const objects = [];
 			for (let j = 0; j < 1000; j++) {
-				objects.push({ data: new Array(100).fill(Math.random()) });
+				objects.push({
+					data: new Array(100).fill(0).map(() => crypto.randomInt(0, 1000000) / 1000000),
+				});
 			}
 		}
 		const gcEnd = process.hrtime.bigint();

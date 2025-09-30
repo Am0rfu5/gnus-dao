@@ -3,6 +3,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 
+interface FileConsistency {
+	file_path: string;
+	consistent: boolean;
+	hash?: string;
+	expected_hash?: string | null;
+	status: 'consistent' | 'inconsistent' | 'missing' | 'extra';
+}
+
 interface ArtifactValidationResult {
 	timestamp: string;
 	validation_type: string;
@@ -18,12 +26,14 @@ interface ArtifactValidationResult {
 	recommendations: string[];
 }
 
-interface FileConsistency {
-	file_path: string;
-	consistent: boolean;
-	hash?: string;
-	expected_hash?: string;
-	status: 'consistent' | 'inconsistent' | 'missing' | 'extra';
+interface ValidationOptions {
+	directory?: string;
+	baseline?: string;
+	output?: string;
+}
+
+interface ArtifactHashes {
+	[key: string]: string | null;
 }
 
 class ArtifactConsistencyValidator {
@@ -46,7 +56,9 @@ class ArtifactConsistencyValidator {
 		};
 	}
 
-	async validateArtifactConsistency(options: any = {}): Promise<ArtifactValidationResult> {
+	async validateArtifactConsistency(
+		options: ValidationOptions = {},
+	): Promise<ArtifactValidationResult> {
 		const artifactsDir = options.directory || path.join(process.cwd(), 'artifacts');
 		const baselineFile = options.baseline;
 		const outputFile = options.output || 'artifact-consistency-results.json';
@@ -65,7 +77,7 @@ class ArtifactConsistencyValidator {
 		}
 
 		// Load baseline if provided
-		let baselineHashes: any = {};
+		let baselineHashes: ArtifactHashes = {};
 		if (baselineFile && fs.existsSync(baselineFile)) {
 			baselineHashes = JSON.parse(fs.readFileSync(baselineFile, 'utf8'));
 			console.log(`Loaded baseline from ${baselineFile}`);
@@ -87,8 +99,8 @@ class ArtifactConsistencyValidator {
 		return this.results;
 	}
 
-	generateBaselineHashes(artifactsDir: string): any {
-		const hashes: any = {};
+	generateBaselineHashes(artifactsDir: string): ArtifactHashes {
+		const hashes: ArtifactHashes = {};
 
 		try {
 			const files = this.getAllArtifactFiles(artifactsDir);
@@ -106,7 +118,10 @@ class ArtifactConsistencyValidator {
 		return hashes;
 	}
 
-	async validateArtifacts(artifactsDir: string, baselineHashes: any): Promise<void> {
+	async validateArtifacts(
+		artifactsDir: string,
+		baselineHashes: ArtifactHashes,
+	): Promise<void> {
 		const currentFiles = this.getAllArtifactFiles(artifactsDir);
 		const baselineFilePaths = Object.keys(baselineHashes);
 

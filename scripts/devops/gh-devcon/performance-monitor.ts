@@ -7,39 +7,39 @@ import * as path from 'path';
 interface PerformanceMetrics {
 	timestamp: string;
 	environment: string;
-	container: ContainerMetrics;
-	workflow: WorkflowMetrics;
-	resources: ResourceMetrics;
-	cache: CacheMetrics;
-	optimization: OptimizationMetrics;
-	total_collection_time: number;
+	container?: ContainerMetrics;
+	workflow?: WorkflowMetrics;
+	resources?: ResourceMetrics;
+	cache?: CacheMetrics;
+	optimization?: OptimizationMetrics;
+	total_collection_time?: number;
 }
 
 interface ContainerMetrics {
-	startup_time: number | null;
-	build_time: number | null;
-	image_size: string | null;
-	layer_count: number | null;
-	pull_time: number | null;
-	collection_time: number;
+	startup_time?: number | null;
+	build_time?: number | null;
+	image_size?: string | null;
+	layer_count?: number | null;
+	pull_time?: number | null;
+	collection_time?: number;
 }
 
 interface WorkflowMetrics {
-	job_execution_times: Record<string, number | null>;
-	parallel_efficiency: number | null;
-	queue_time: number | null;
-	total_workflow_time: number | null;
-	step_breakdown: Record<string, number | null>;
-	collection_time: number;
+	job_execution_times?: Record<string, number | null>;
+	parallel_efficiency?: number | null;
+	queue_time?: number | null;
+	total_workflow_time?: number | null;
+	step_breakdown?: Record<string, number | null>;
+	collection_time?: number;
 }
 
 interface ResourceMetrics {
-	cpu_usage: CPUUsage | null;
-	memory_usage: MemoryUsage | null;
-	disk_io: DiskIOMetrics | null;
-	network_io: NetworkIOMetrics | null;
-	container_resources: ContainerResourceUsage | null;
-	collection_time: number;
+	cpu_usage?: CPUUsage | null;
+	memory_usage?: MemoryUsage | null;
+	disk_io?: DiskIOMetrics | null;
+	network_io?: NetworkIOMetrics | null;
+	container_resources?: ContainerResourceUsage | null;
+	collection_time?: number;
 }
 
 interface CPUUsage {
@@ -84,11 +84,11 @@ interface CgroupMemoryStats {
 }
 
 interface CacheMetrics {
-	dependency_cache: DependencyCacheMetrics | null;
-	docker_layer_cache: DockerLayerCacheMetrics | null;
-	build_cache: BuildCacheMetrics | null;
-	overall_cache_efficiency: number | null;
-	collection_time: number;
+	dependency_cache?: DependencyCacheMetrics | null;
+	docker_layer_cache?: DockerLayerCacheMetrics | null;
+	build_cache?: BuildCacheMetrics | null;
+	overall_cache_efficiency?: number | null;
+	collection_time?: number;
 }
 
 interface DependencyCacheMetrics {
@@ -140,11 +140,11 @@ interface ESLintCacheStats {
 }
 
 interface OptimizationMetrics {
-	bottlenecks: Bottleneck[];
-	optimization_opportunities: OptimizationOpportunity[];
-	performance_score: number;
-	recommendations: string[];
-	collection_time: number;
+	bottlenecks?: Bottleneck[];
+	optimization_opportunities?: OptimizationOpportunity[];
+	performance_score?: number;
+	recommendations?: string[];
+	collection_time?: number;
 }
 
 interface Bottleneck {
@@ -330,7 +330,7 @@ class DevContainerPerformanceMonitor {
 
 	private async getParallelExecutionTime(): Promise<number> {
 		const jobTimes = await this.getJobExecutionTimes();
-		return Object.values(jobTimes).reduce((sum, time) => sum + (time || 0), 0);
+		return Object.values(jobTimes).reduce((sum: number, time) => sum + (time || 0), 0);
 	}
 
 	private async getWorkflowQueueTime(): Promise<number | null> {
@@ -741,7 +741,7 @@ class DevContainerPerformanceMonitor {
 
 		// Cache optimization opportunities
 		const cacheEfficiency = this.metrics.cache?.overall_cache_efficiency;
-		if (cacheEfficiency !== null && cacheEfficiency < 60) {
+		if (cacheEfficiency != null && cacheEfficiency < 60) {
 			opportunities.push({
 				type: 'cache_optimization',
 				current_efficiency: cacheEfficiency,
@@ -752,7 +752,7 @@ class DevContainerPerformanceMonitor {
 
 		// Parallel execution optimization
 		const parallelEfficiency = this.metrics.workflow?.parallel_efficiency;
-		if (parallelEfficiency !== null && parallelEfficiency < 70) {
+		if (parallelEfficiency != null && parallelEfficiency < 70) {
 			opportunities.push({
 				type: 'parallel_optimization',
 				current_efficiency: parallelEfficiency,
@@ -798,7 +798,7 @@ class DevContainerPerformanceMonitor {
 
 		// Bonus points for good cache efficiency
 		const cacheEfficiency = this.metrics.cache?.overall_cache_efficiency;
-		if (cacheEfficiency !== null) {
+		if (cacheEfficiency != null) {
 			if (cacheEfficiency > 80) score += 10;
 			else if (cacheEfficiency > 60) score += 5;
 			else if (cacheEfficiency < 40) score -= 10;
@@ -806,7 +806,7 @@ class DevContainerPerformanceMonitor {
 
 		// Bonus points for good parallel efficiency
 		const parallelEfficiency = this.metrics.workflow?.parallel_efficiency;
-		if (parallelEfficiency !== null) {
+		if (parallelEfficiency != null) {
 			if (parallelEfficiency > 85) score += 10;
 			else if (parallelEfficiency > 70) score += 5;
 			else if (parallelEfficiency < 50) score -= 10;
@@ -873,7 +873,7 @@ class DevContainerPerformanceMonitor {
 			recommendations.push('Consider breaking workflow into smaller, more focused jobs');
 		}
 
-		return [...new Set(recommendations)]; // Remove duplicates
+		return Array.from(new Set(recommendations)); // Remove duplicates
 	}
 
 	private async getDirectorySize(dirPath: string): Promise<number> {
@@ -941,7 +941,7 @@ if (require.main === module) {
 			}
 
 			// Exit with performance-based code
-			const score = metrics.optimization.performance_score;
+			const score = metrics.optimization?.performance_score ?? 50;
 			process.exit(score < 70 ? 1 : 0); // Fail if performance score < 70
 		})
 		.catch((error) => {

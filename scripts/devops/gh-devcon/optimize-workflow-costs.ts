@@ -26,6 +26,27 @@ interface CostAnalysis {
 	};
 }
 
+interface OptimizationStrategy {
+	description: string;
+	implementation_effort: 'low' | 'medium' | 'high';
+	impact: 'low' | 'medium' | 'high';
+	potential_savings_percentage: number;
+	implementation_steps: string[];
+	estimated_time_to_implement: string;
+}
+
+interface ApplicableStrategy extends OptimizationStrategy {
+	potential_savings: number;
+	workflows_affected: string[];
+}
+
+interface WorkflowOptimization {
+	current_cost: number;
+	optimized_cost: number;
+	savings: number;
+	optimizations: string[];
+}
+
 interface WorkflowOptimizationPlan {
 	timestamp: number;
 	total_current_cost: number;
@@ -195,7 +216,7 @@ class WorkflowCostOptimizer {
 	}
 
 	private calculateOptimizationStrategies(costAnalysis: CostAnalysis) {
-		const applicableStrategies: any = {};
+		const applicableStrategies: Record<string, ApplicableStrategy> = {};
 
 		// Analyze cost patterns to determine applicable strategies
 		const totalCost = costAnalysis.total_cost;
@@ -275,7 +296,7 @@ class WorkflowCostOptimizer {
 	}
 
 	private generateWorkflowSpecificOptimizations(costAnalysis: CostAnalysis) {
-		const optimizations: any = {};
+		const optimizations: Record<string, WorkflowOptimization> = {};
 
 		for (const [workflowName, cost] of Object.entries(costAnalysis.workflow_costs)) {
 			const workflowOptimizations: string[] = [];
@@ -314,7 +335,9 @@ class WorkflowCostOptimizer {
 		return optimizations;
 	}
 
-	private createImplementationRoadmap(optimizationStrategies: any) {
+	private createImplementationRoadmap(
+		optimizationStrategies: Record<string, ApplicableStrategy>,
+	) {
 		const immediateActions: string[] = [];
 		const shortTerm: string[] = [];
 		const longTerm: string[] = [];
@@ -375,7 +398,10 @@ class WorkflowCostOptimizer {
 		};
 	}
 
-	private calculateTotalOptimizedCost(costAnalysis: CostAnalysis, strategies: any): number {
+	private calculateTotalOptimizedCost(
+		costAnalysis: CostAnalysis,
+		strategies: Record<string, ApplicableStrategy>,
+	): number {
 		let totalSavings = 0;
 
 		for (const strategy of Object.values(strategies) as any[]) {

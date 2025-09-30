@@ -3,6 +3,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 
+interface ToolConfig {
+	min_version?: string;
+	max_version?: string;
+	required_version?: string;
+	critical?: boolean;
+}
+
 interface ToolVersion {
 	name: string;
 	required_version?: string;
@@ -27,7 +34,7 @@ interface ValidationResult {
 }
 
 class ToolVersionValidator {
-	private requiredTools: { [key: string]: any } = {
+	private requiredTools: { [key: string]: ToolConfig } = {
 		// Runtime tools
 		node: { min_version: '18.0.0', critical: true },
 		npm: { min_version: '8.0.0', critical: true },
@@ -106,7 +113,7 @@ class ToolVersionValidator {
 		return result;
 	}
 
-	private async validateTool(toolName: string, config: any): Promise<ToolVersion> {
+	private async validateTool(toolName: string, config: ToolConfig): Promise<ToolVersion> {
 		const result: ToolVersion = {
 			name: toolName,
 			required_version: config.required_version,
@@ -193,7 +200,7 @@ class ToolVersionValidator {
 		return fallbackMatch ? fallbackMatch[1] : output.trim();
 	}
 
-	private checkVersionCompatibility(version: string, config: any): boolean {
+	private checkVersionCompatibility(version: string, config: ToolConfig): boolean {
 		if (!version) return false;
 
 		try {

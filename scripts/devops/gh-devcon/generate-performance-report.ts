@@ -45,7 +45,14 @@ interface CostAnalysis {
 		paid_minutes: number;
 		included_minutes: number;
 	};
-	workflow_costs: { [key: string]: any };
+	workflow_costs: {
+		[key: string]: {
+			cost: number;
+			minutes: number;
+			runs: number;
+			average_cost_per_run: number;
+		};
+	};
 	optimization_opportunities: {
 		potential_savings: number;
 		recommendations: string[];
@@ -83,13 +90,26 @@ interface PerformanceReport {
 	cost_analysis: {
 		current_spending: number;
 		estimated_monthly: number;
-		cost_breakdown: any;
-		optimization_opportunities: any;
+		cost_breakdown: {
+			workflow_minutes: number;
+			paid_minutes: number;
+			included_minutes: number;
+		};
+		optimization_opportunities: {
+			potential_savings: number;
+			recommendations: string[];
+			priority_actions: string[];
+		};
 	};
 	regression_analysis: {
 		regression_detected: boolean;
 		regression_level: string;
-		key_changes: any;
+		key_changes: {
+			workflow_time_change: number;
+			container_startup_change: number;
+			cache_hit_ratio_change: number;
+			performance_score_change: number;
+		};
 		recommendations: string[];
 	};
 	recommendations: {
@@ -265,7 +285,11 @@ class PerformanceReportGenerator {
 			return {
 				current_spending: 0,
 				estimated_monthly: 0,
-				cost_breakdown: {},
+				cost_breakdown: {
+					workflow_minutes: 0,
+					paid_minutes: 0,
+					included_minutes: 0,
+				},
 				optimization_opportunities: {
 					potential_savings: 0,
 					recommendations: [],
@@ -287,7 +311,12 @@ class PerformanceReportGenerator {
 			return {
 				regression_detected: false,
 				regression_level: 'none',
-				key_changes: {},
+				key_changes: {
+					workflow_time_change: 0,
+					container_startup_change: 0,
+					cache_hit_ratio_change: 0,
+					performance_score_change: 0,
+				},
 				recommendations: [],
 			};
 		}

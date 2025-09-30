@@ -9,7 +9,7 @@ interface DiagnosticResult {
 	component: string;
 	status: 'PASS' | 'FAIL' | 'WARN';
 	message: string;
-	details?: any;
+	details?: Record<string, unknown>;
 	recommendation?: string;
 }
 

@@ -4,6 +4,7 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 import * as crypto from 'crypto';
 import * as os from 'os';
+import { IncomingMessage } from 'http';
 
 interface SystemInfo {
 	platform: string;
@@ -112,7 +113,7 @@ interface PerformanceInfo {
 	io_benchmark: IoBenchmark;
 }
 
-interface EnvironmentFingerprint {
+export interface EnvironmentFingerprint {
 	timestamp: string;
 	environment_type: string;
 	hash: string;
@@ -373,7 +374,7 @@ class EnvironmentFingerprinter {
 		const client = url.startsWith('https:') ? https : http;
 
 		return new Promise((resolve, reject) => {
-			const req = client.get(url, (res: any) => {
+			const req = client.get(url, (res: IncomingMessage) => {
 				resolve();
 			});
 			req.setTimeout(5000);
@@ -469,7 +470,7 @@ class EnvironmentFingerprinter {
 		const startHrTime = process.hrtime.bigint();
 
 		while (Date.now() - startTime < benchmarkDuration) {
-			Math.sqrt(Math.random() * 1000000);
+			Math.sqrt(crypto.randomInt(1000000));
 			iterations++;
 		}
 

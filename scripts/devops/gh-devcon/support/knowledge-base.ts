@@ -42,7 +42,7 @@ interface DiagnosticResult {
 	component: string;
 	status: 'PASS' | 'FAIL' | 'WARN';
 	message: string;
-	details?: any;
+	details?: Record<string, unknown>;
 	recommendation?: string;
 }
 
@@ -51,6 +51,13 @@ interface SearchResult {
 	relevanceScore: number;
 	matchedTerms: string[];
 	suggestedActions: string[];
+}
+
+interface SearchOptions {
+	category?: string;
+	severity?: string;
+	platform?: string;
+	limit?: number;
 }
 
 class DevContainerKnowledgeBase {
@@ -613,7 +620,7 @@ async function main() {
 					process.exit(1);
 				}
 
-				const options: any = {};
+				const options: SearchOptions = {};
 				for (let i = 2; i < args.length; i += 2) {
 					const flag = args[i];
 					const value = args[i + 1];

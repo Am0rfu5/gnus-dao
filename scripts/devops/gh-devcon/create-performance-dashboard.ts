@@ -33,12 +33,24 @@ interface CostAnalysis {
 		paid_minutes: number;
 		included_minutes: number;
 	};
-	workflow_costs: { [key: string]: any };
+	workflow_costs: {
+		[key: string]: {
+			cost: number;
+			minutes: number;
+			runs: number;
+			average_cost_per_run: number;
+		};
+	};
 	optimization_opportunities: {
 		potential_savings: number;
 		recommendations: string[];
 		priority_actions: string[];
 	};
+}
+
+interface RegressionAnalysis {
+	regression_detected: boolean;
+	recommendations: string[];
 }
 
 class PerformanceDashboardCreator {
@@ -47,9 +59,15 @@ class PerformanceDashboardCreator {
 			console.log('📊 Creating performance dashboard...');
 
 			// Load data
-			const metrics = this.loadData(dataDir, 'performance-metrics.json');
-			const cost = this.loadData(dataDir, 'cost-analysis.json');
-			const regression = this.loadData(dataDir, 'regression-analysis.json');
+			const metrics = this.loadData(
+				dataDir,
+				'performance-metrics.json',
+			) as PerformanceMetrics;
+			const cost = this.loadData(dataDir, 'cost-analysis.json') as CostAnalysis;
+			const regression = this.loadData(
+				dataDir,
+				'regression-analysis.json',
+			) as RegressionAnalysis;
 
 			// Generate HTML dashboard
 			const html = this.generateHTMLDashboard(metrics, cost, regression);
@@ -65,7 +83,7 @@ class PerformanceDashboardCreator {
 		}
 	}
 
-	private loadData(dataDir: string, filename: string): any {
+	private loadData(dataDir: string, filename: string): unknown {
 		try {
 			const filePath = join(dataDir, filename);
 			return JSON.parse(readFileSync(filePath, 'utf-8'));
@@ -75,7 +93,11 @@ class PerformanceDashboardCreator {
 		}
 	}
 
-	private generateHTMLDashboard(metrics: any, cost: any, regression: any): string {
+	private generateHTMLDashboard(
+		metrics: PerformanceMetrics,
+		cost: CostAnalysis,
+		regression: RegressionAnalysis,
+	): string {
 		const performanceScore = metrics?.optimization?.performance_score || 0;
 		const totalCost = cost?.total_cost || 0;
 		const regressionDetected = regression?.regression_detected || false;
@@ -495,7 +517,10 @@ class PerformanceDashboardCreator {
 		}
 	}
 
-	private generateRecommendationsHTML(cost: any, regression: any): string {
+	private generateRecommendationsHTML(
+		cost: CostAnalysis,
+		regression: RegressionAnalysis,
+	): string {
 		const recommendations = [
 			...(cost?.optimization_opportunities?.priority_actions || []).slice(0, 3),
 			...(regression?.recommendations || []).slice(0, 2),

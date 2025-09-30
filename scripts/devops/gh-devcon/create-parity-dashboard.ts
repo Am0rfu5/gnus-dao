@@ -7,11 +7,11 @@ interface ParityResult {
 	overall_parity_score: number;
 	critical_issues_count: number;
 	validation_passed: boolean;
-	environment_fingerprint?: any;
-	tool_versions?: any;
-	performance_metrics?: any;
-	network_access?: any;
-	reproducibility?: any;
+	environment_fingerprint?: boolean;
+	tool_versions?: boolean;
+	performance_metrics?: boolean;
+	network_access?: boolean;
+	reproducibility?: boolean;
 }
 
 function generateDashboard(inputFile: string, outputFile: string): void {
