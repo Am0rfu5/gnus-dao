@@ -314,7 +314,7 @@ class SecurityMetricsDashboard {
 	 */
 	private loadIncidentsData(): Incident[] {
 		try {
-			const incidentsDir: string = path.join(__dirname, '..', 'test-assets', 'incidents');
+			const incidentsDir: string = path.join(__dirname, '..', 'reports', 'incidents');
 			if (fs.existsSync(incidentsDir)) {
 				const files: string[] = fs.readdirSync(incidentsDir);
 				return files
@@ -334,7 +334,7 @@ class SecurityMetricsDashboard {
 	 */
 	private loadAlertsData(): Alert[] {
 		try {
-			const alertsDir: string = path.join(__dirname, '..', 'test-assets', 'alerts');
+			const alertsDir: string = path.join(__dirname, '..', 'reports', 'alerts');
 			if (fs.existsSync(alertsDir)) {
 				const files: string[] = fs.readdirSync(alertsDir);
 				return files

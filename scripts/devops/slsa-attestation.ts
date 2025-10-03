@@ -6,9 +6,9 @@
  * Provides cryptographically verifiable build provenance
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
 
 // TypeScript interfaces for SLSA structures
 interface BuildSubject {
@@ -123,7 +123,7 @@ class SLSAAttestation {
 
 	constructor() {
 		this.buildDir = path.join(__dirname, '..');
-		this.attestationsDir = path.join(__dirname, '..', 'test-assets', 'attestations');
+		this.attestationsDir = path.join(__dirname, '..', 'reports', 'attestations');
 		this.slsaVersion = '1.0';
 	}
 

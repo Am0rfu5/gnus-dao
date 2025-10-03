@@ -6,9 +6,9 @@
  * Integrates with security monitoring and alerting systems
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
 
 // Type definitions
 interface TimelineEntry {
@@ -96,7 +96,7 @@ class IncidentResponseSystem {
 	private incidentCounter: number;
 
 	constructor() {
-		this.incidentsDir = path.join(__dirname, '..', 'test-assets', 'incidents');
+		this.incidentsDir = path.join(__dirname, '..', 'reports', 'incidents');
 		this.playbooksDir = path.join(__dirname, '..', 'docs', 'incident-playbooks');
 		this.config = this.loadConfiguration();
 		this.incidentCounter = this.getNextIncidentId();

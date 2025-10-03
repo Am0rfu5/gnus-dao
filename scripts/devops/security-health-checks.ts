@@ -112,8 +112,8 @@ class SecurityHealthChecks {
 	private config: HealthCheckConfig;
 
 	constructor() {
-		this.checksDir = path.join(__dirname, '..', 'test-assets', 'checks');
-		this.reportsDir = path.join(__dirname, '..', 'test-assets', 'health-reports');
+		this.checksDir = path.join(__dirname, '..', 'reports', 'checks');
+		this.reportsDir = path.join(__dirname, '..', 'reports', 'health-reports');
 		this.config = this.loadConfiguration();
 	}
 

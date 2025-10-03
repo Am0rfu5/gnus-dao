@@ -267,9 +267,9 @@ class SecurityMonitoringWebhook {
 	private metricsCollector: MetricsCollector;
 
 	constructor() {
-		this.eventsDir = path.join(__dirname, '..', 'test-assets', 'security-events');
-		this.incidentsDir = path.join(__dirname, '..', 'test-assets', 'incidents');
-		this.metricsDir = path.join(__dirname, '..', 'test-assets', 'metrics');
+		this.eventsDir = path.join(__dirname, '..', 'reports', 'security-events');
+		this.incidentsDir = path.join(__dirname, '..', 'reports', 'incidents');
+		this.metricsDir = path.join(__dirname, '..', 'reports', 'metrics');
 		this.config = this.loadConfiguration();
 		this.alertManager = new AlertManager(this.config);
 		this.incidentManager = new IncidentManager(this.config);
@@ -860,7 +860,7 @@ class IncidentManager {
 
 	constructor(config: WebhookConfig) {
 		this.config = config;
-		this.incidentsDir = path.join(__dirname, '..', 'test-assets', 'incidents');
+		this.incidentsDir = path.join(__dirname, '..', 'reports', 'incidents');
 	}
 
 	async createIncident(incidentData: IncidentData): Promise<Incident> {
@@ -908,7 +908,7 @@ class MetricsCollector {
 
 	constructor(config: WebhookConfig) {
 		this.config = config;
-		this.metricsDir = path.join(__dirname, '..', 'test-assets', 'metrics');
+		this.metricsDir = path.join(__dirname, '..', 'reports', 'metrics');
 	}
 
 	async updateMetrics(eventType: string, payload: WebhookPayload): Promise<void> {

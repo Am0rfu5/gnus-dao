@@ -6,10 +6,10 @@
  * Generates security reports and risk mitigation recommendations
  */
 
+import { execSync } from 'child_process';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
-import { execSync } from 'child_process';
 
 // TypeScript interfaces for Supply Chain Risk Assessment
 interface RiskThresholds {
@@ -140,7 +140,7 @@ class SupplyChainRiskAssessment {
 
 	constructor() {
 		this.buildDir = path.join(__dirname, '..', '..');
-		this.reportsDir = path.join(__dirname, '..', '..', 'test-assets', 'reports');
+		this.reportsDir = path.join(__dirname, '..', '..', 'reports', 'reports');
 		this.riskThresholds = this.loadRiskThresholds();
 		this.knownVulnerabilities = this.loadKnownVulnerabilities();
 	}

@@ -6,9 +6,9 @@
  * Provides cryptographic attestation using Sigstore's transparency log
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
 
 interface SigstoreConfig {
 	rekorUrl: string;
@@ -95,7 +95,7 @@ class SigstoreIntegration {
 
 	constructor() {
 		this.buildDir = path.join(__dirname, '..', '..');
-		this.attestationsDir = path.join(__dirname, '..', '..', 'test-assets', 'attestations');
+		this.attestationsDir = path.join(__dirname, '..', '..', 'reports', 'attestations');
 		this.sigstoreConfig = this.loadSigstoreConfig();
 	}
 
