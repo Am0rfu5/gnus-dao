@@ -6,9 +6,9 @@
  * Implements supply chain security checks for key packages
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
 
 interface ValidationResult {
 	type: string;
@@ -491,7 +491,7 @@ class ProvenanceValidator {
 			__dirname,
 			'..',
 			'..',
-			'test-assets',
+			'reports',
 			'provenance-report.json',
 		);
 		fs.mkdirSync(path.dirname(reportPath), { recursive: true });
