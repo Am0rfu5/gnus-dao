@@ -132,13 +132,7 @@ try {
 				issues: failedRules.map((r: SecurityValidationRule) => r.message),
 			};
 
-			const logFile: string = path.join(
-				__dirname,
-				'..',
-				'..',
-				'logs',
-				'security-commits.log',
-			);
+			const logFile: string = path.join(process.cwd(), 'logs', 'security-commits.log');
 			const logDir: string = path.dirname(logFile);
 
 			if (!fs.existsSync(logDir)) {
@@ -158,13 +152,7 @@ try {
 			validation: 'PASSED',
 		};
 
-		const logFile: string = path.join(
-			__dirname,
-			'..',
-			'..',
-			'logs',
-			'security-commits.log',
-		);
+		const logFile: string = path.join(process.cwd(), 'logs', 'security-commits.log');
 		const logDir: string = path.dirname(logFile);
 
 		if (!fs.existsSync(logDir)) {

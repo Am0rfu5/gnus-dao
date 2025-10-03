@@ -5,9 +5,9 @@
  * Verifies the cryptographic signature and provenance of signed artifacts
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
 
 interface BuildInfo {
 	node_version: string;
@@ -117,7 +117,7 @@ class ArtifactVerifier {
 		let integrityIssues = 0;
 
 		for (const [artifactName, artifactInfo] of Object.entries(provenance.artifacts)) {
-			const artifactPath = path.join(__dirname, artifactName);
+			const artifactPath = path.join(process.cwd(), 'signed-artifacts', artifactName);
 
 			if (!fs.existsSync(artifactPath)) {
 				console.error(`❌ Artifact directory missing: ${artifactName}`);

@@ -69,7 +69,7 @@ class ProvenanceValidator {
 
 	constructor() {
 		this.packageJson = path.join(process.cwd(), 'package.json');
-		this.yarnLock = path.join(process.cwd(), '..', 'yarn.lock');
+		this.yarnLock = path.join(process.cwd(), 'yarn.lock');
 		this.criticalPackages = [
 			'hardhat',
 			'@nomicfoundation/hardhat-toolbox',
@@ -290,7 +290,7 @@ class ProvenanceValidator {
 	): Promise<void> {
 		// Check if package is installed
 		try {
-			const packagePath = path.join(__dirname, '..', '..', 'node_modules', packageName);
+			const packagePath = path.join(process.cwd(), 'node_modules', packageName);
 			if (!fs.existsSync(packagePath)) {
 				throw new Error('Package not installed');
 			}
@@ -488,9 +488,7 @@ class ProvenanceValidator {
 		};
 
 		const reportPath = path.join(
-			__dirname,
-			'..',
-			'..',
+			process.cwd(),
 			'reports',
 			'provenance-report.json',
 		);

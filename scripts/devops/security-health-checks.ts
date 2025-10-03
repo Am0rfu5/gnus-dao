@@ -112,8 +112,8 @@ class SecurityHealthChecks {
 	private config: HealthCheckConfig;
 
 	constructor() {
-		this.checksDir = path.join(process.cwd(), '..', 'reports', 'checks');
-		this.reportsDir = path.join(process.cwd(), '..', 'reports', 'health-reports');
+		this.checksDir = path.join(process.cwd(), 'reports', 'checks');
+		this.reportsDir = path.join(process.cwd(), 'reports', 'health-reports');
 		this.config = this.loadConfiguration();
 	}
 
@@ -467,8 +467,7 @@ class SecurityHealthChecks {
 		try {
 			// Check diamond configuration
 			const diamondConfigPath = path.join(
-				__dirname,
-				'..',
+				process.cwd(),
 				'diamonds',
 				'GNUSDAODiamond',
 				'gnusdaodiamond.config.json',

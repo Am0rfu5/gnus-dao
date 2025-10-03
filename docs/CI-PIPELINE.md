@@ -62,7 +62,7 @@ Build optimization settings and performance thresholds.
 
 Multi-chain testing configuration and network settings.
 
-### scripts/ci-perf-monitor.js
+### scripts/devops/ci-perf-monitor.js
 
 CI-specific performance monitoring and metrics collection.
 

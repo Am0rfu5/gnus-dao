@@ -57,7 +57,7 @@ class ArtifactSigner {
 
 	constructor() {
 		this.artifactsDir = path.join(process.cwd(), 'artifacts');
-		this.signedDir = path.join(__dirname, 'signed-artifacts');
+		this.signedDir = path.join(process.cwd(), 'signed-artifacts');
 		this.provenanceFile = path.join(this.signedDir, 'provenance.json');
 		this.signatureFile = path.join(this.signedDir, 'artifacts.sig');
 	}

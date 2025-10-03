@@ -140,7 +140,7 @@ class SupplyChainRiskAssessment {
 
 	constructor() {
 		this.buildDir = path.join(process.cwd());
-		this.reportsDir = path.join(__dirname, '..', '..', 'reports', 'reports');
+		this.reportsDir = path.join(process.cwd(), 'reports', 'reports');
 		this.riskThresholds = this.loadRiskThresholds();
 		this.knownVulnerabilities = this.loadKnownVulnerabilities();
 	}
