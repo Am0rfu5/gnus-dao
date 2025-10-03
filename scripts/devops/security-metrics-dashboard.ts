@@ -8,7 +8,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
 
 interface DashboardConfig {
 	metrics: {
@@ -196,9 +195,9 @@ class SecurityMetricsDashboard {
 	private config: DashboardConfig;
 
 	constructor() {
-		this.metricsDir = path.join(__dirname, '..', 'test-assets', 'metrics');
-		this.reportsDir = path.join(__dirname, '..', 'test-assets', 'reports');
-		this.dashboardDir = path.join(__dirname, '..', 'docs', 'security-dashboard');
+		this.metricsDir = path.join(__dirname, '..', 'reports', 'metrics');
+		this.reportsDir = path.join(__dirname, '..', 'reports', 'security');
+		this.dashboardDir = path.join(__dirname, '..', 'reports', 'dashboard');
 		this.config = this.loadConfiguration();
 	}
 
