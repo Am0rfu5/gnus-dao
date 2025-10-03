@@ -47,7 +47,7 @@ class PerformanceMonitor {
 	private timingStateFile: string;
 
 	constructor() {
-		this.logDir = path.join(__dirname, '..', '..', 'logs');
+		this.logDir = path.join(process.cwd(), 'logs');
 		this.perfLogFile = path.join(this.logDir, 'hook-performance.log');
 		this.timingStateFile = path.join(this.logDir, 'timing-state.json');
 		this.ensureLogDir();

@@ -122,8 +122,8 @@ class SLSAAttestation {
 	private slsaVersion: string;
 
 	constructor() {
-		this.buildDir = path.join(__dirname, '..');
-		this.attestationsDir = path.join(__dirname, '..', 'reports', 'attestations');
+		this.buildDir = path.join(process.cwd());
+		this.attestationsDir = path.join(process.cwd(), 'reports', 'attestations');
 		this.slsaVersion = '1.0';
 	}
 

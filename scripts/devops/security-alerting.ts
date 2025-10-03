@@ -6,9 +6,9 @@
  * Provides configurable alerting rules and escalation procedures
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
 
 // Type definitions
 type AlertSeverity = 'critical' | 'high' | 'medium' | 'low';
@@ -157,8 +157,8 @@ class SecurityAlerting {
 
 	constructor() {
 		this.config = this.loadConfiguration();
-		this.alertsDir = path.join(__dirname, '..', 'test-assets', 'alerts');
-		this.templatesDir = path.join(__dirname, '..', 'templates', 'alerts');
+		this.alertsDir = path.join(process.cwd(), 'reports', 'alerts');
+		this.templatesDir = path.join(process.cwd(), 'templates', 'alerts');
 		this.escalationRules = this.loadEscalationRules();
 	}
 

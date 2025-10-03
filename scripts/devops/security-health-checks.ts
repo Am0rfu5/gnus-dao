@@ -112,8 +112,8 @@ class SecurityHealthChecks {
 	private config: HealthCheckConfig;
 
 	constructor() {
-		this.checksDir = path.join(__dirname, '..', 'reports', 'checks');
-		this.reportsDir = path.join(__dirname, '..', 'reports', 'health-reports');
+		this.checksDir = path.join(process.cwd(), '..', 'reports', 'checks');
+		this.reportsDir = path.join(process.cwd(), '..', 'reports', 'health-reports');
 		this.config = this.loadConfiguration();
 	}
 
@@ -415,7 +415,7 @@ class SecurityHealthChecks {
 
 		try {
 			// Check if audit report exists and is recent
-			const auditReportPath = path.join(__dirname, '..', 'docs', 'audit-report.pdf');
+			const auditReportPath = path.join(process.cwd(), 'docs', 'audit-report.pdf');
 			const auditExists = fs.existsSync(auditReportPath);
 
 			if (auditExists) {
@@ -537,7 +537,7 @@ class SecurityHealthChecks {
 
 		try {
 			// Check network configurations
-			const networksPath = path.join(__dirname, '..', 'config', 'networks');
+			const networksPath = path.join(process.cwd(), 'config', 'networks');
 			const networkFiles = fs.readdirSync(networksPath);
 
 			let insecureConfigs = 0;

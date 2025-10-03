@@ -68,8 +68,8 @@ class ProvenanceValidator {
 	private results: ValidationResults;
 
 	constructor() {
-		this.packageJson = path.join(__dirname, '..', '..', 'package.json');
-		this.yarnLock = path.join(__dirname, '..', '..', 'yarn.lock');
+		this.packageJson = path.join(process.cwd(), 'package.json');
+		this.yarnLock = path.join(process.cwd(), '..', 'yarn.lock');
 		this.criticalPackages = [
 			'hardhat',
 			'@nomicfoundation/hardhat-toolbox',

@@ -5,10 +5,10 @@
  * Creates cryptographic signatures and provenance attestations for build artifacts
  */
 
+import { execSync } from 'child_process';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
-import { execSync } from 'child_process';
 
 interface BuildInfo {
 	node_version: string;
@@ -56,7 +56,7 @@ class ArtifactSigner {
 	private signatureFile: string;
 
 	constructor() {
-		this.artifactsDir = path.join(__dirname, '..', 'artifacts');
+		this.artifactsDir = path.join(process.cwd(), 'artifacts');
 		this.signedDir = path.join(__dirname, 'signed-artifacts');
 		this.provenanceFile = path.join(this.signedDir, 'provenance.json');
 		this.signatureFile = path.join(this.signedDir, 'artifacts.sig');
@@ -141,7 +141,7 @@ class ArtifactSigner {
 		const artifactDirs = ['artifacts', 'diamond-abi', 'diamond-typechain-types'];
 
 		for (const dir of artifactDirs) {
-			const dirPath = path.join(__dirname, '..', dir);
+			const dirPath = path.join(process.cwd(), dir);
 			if (fs.existsSync(dirPath)) {
 				provenance.artifacts[dir] = {
 					path: dir,
@@ -163,7 +163,7 @@ class ArtifactSigner {
 	}
 
 	private getDependencyInfo(): DependencyInfo {
-		const packageJson = path.join(__dirname, '..', 'package.json');
+		const packageJson = path.join(process.cwd(), 'package.json');
 		if (!fs.existsSync(packageJson)) {
 			return {
 				package_count: 0,
@@ -173,7 +173,7 @@ class ArtifactSigner {
 		}
 
 		const pkg = JSON.parse(fs.readFileSync(packageJson, 'utf8'));
-		const yarnLock = path.join(__dirname, '..', 'yarn.lock');
+		const yarnLock = path.join(process.cwd(), 'yarn.lock');
 
 		return {
 			package_count:
@@ -216,7 +216,7 @@ class ArtifactSigner {
 		];
 
 		for (const artifact of artifactsToCopy) {
-			const sourcePath = path.join(__dirname, '..', artifact);
+			const sourcePath = path.join(process.cwd(), artifact);
 			const targetPath = path.join(this.signedDir, artifact);
 
 			if (fs.existsSync(sourcePath)) {

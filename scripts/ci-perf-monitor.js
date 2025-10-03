@@ -47,7 +47,7 @@ class CIPerformanceMonitor {
 
     try {
       // Check contract sizes
-      const artifactsDir = path.join(__dirname, "..", "artifacts", "contracts");
+      const artifactsDir = path.join(process.cwd(), "artifacts", "contracts");
       if (fs.existsSync(artifactsDir)) {
         const contractFiles = fs
           .readdirSync(artifactsDir, { recursive: true })
@@ -88,7 +88,8 @@ class CIPerformanceMonitor {
       }
 
       // Check Diamond ABI generation
-      const diamondAbiDir = path.join(__dirname, "..", "diamond-abi");
+      // TODO this should be checking based on hardhat-diamonds configuration as well
+      const diamondAbiDir = path.join(process.cwd(), "diamond-abi");
       if (fs.existsSync(diamondAbiDir)) {
         const abiFiles = fs
           .readdirSync(diamondAbiDir)
@@ -115,7 +116,7 @@ class CIPerformanceMonitor {
 
     try {
       // Count test files
-      const testDir = path.join(__dirname, "..", "test");
+      const testDir = path.join(process.cwd(), "test");
       if (fs.existsSync(testDir)) {
         const walkDir = (dir) => {
           let results = [];
@@ -157,7 +158,7 @@ class CIPerformanceMonitor {
       try {
         const compileStart = Date.now();
         execSync("npx hardhat compile --force", {
-          cwd: path.join(__dirname, ".."),
+          cwd: path.join(process.cwd()),
           timeout: 60000,
           stdio: "pipe",
         });
@@ -187,7 +188,7 @@ class CIPerformanceMonitor {
       ];
 
       for (const artifact of artifacts) {
-        const artifactPath = path.join(__dirname, "..", artifact);
+        const artifactPath = path.join(process.cwd(), artifact);
         if (fs.existsSync(artifactPath)) {
           const size = this.getDirectorySize(artifactPath);
           this.metrics.artifacts[artifact] = {
@@ -223,12 +224,7 @@ class CIPerformanceMonitor {
       ];
 
       for (const resultFile of securityResults) {
-        const resultPath = path.join(
-          __dirname,
-          "..",
-          "test-assets",
-          resultFile,
-        );
+        const resultPath = path.join(process.cwd(), "reports", resultFile);
         if (fs.existsSync(resultPath)) {
           try {
             const content = fs.readFileSync(resultPath, "utf8");
@@ -258,7 +254,7 @@ class CIPerformanceMonitor {
 
       this.metrics.security.configFiles = {};
       for (const configFile of securityConfigs) {
-        const configPath = path.join(__dirname, "..", configFile);
+        const configPath = path.join(process.cwd(), configFile);
         if (fs.existsSync(configPath)) {
           this.metrics.security.configFiles[configFile] = {
             exists: true,
@@ -391,7 +387,7 @@ class CIPerformanceMonitor {
       };
 
       // Get dependency information
-      const packageJson = path.join(__dirname, "..", "package.json");
+      const packageJson = path.join(process.cwd(), "package.json");
       if (fs.existsSync(packageJson)) {
         const pkg = JSON.parse(fs.readFileSync(packageJson, "utf8"));
         this.metrics.system.dependencies = {
@@ -406,7 +402,7 @@ class CIPerformanceMonitor {
       }
 
       // Check yarn lockfile
-      const yarnLock = path.join(__dirname, "..", "yarn.lock");
+      const yarnLock = path.join(process.cwd(), "yarn.lock");
       if (fs.existsSync(yarnLock)) {
         const lockfileSize = fs.statSync(yarnLock).size;
         this.metrics.system.lockfileSize = lockfileSize;
@@ -429,7 +425,11 @@ class CIPerformanceMonitor {
     };
 
     // Write to file
-    const reportPath = path.join(__dirname, "..", "ci-perf-report.json");
+    const reportPath = path.join(
+      process.cwd(),
+      "reports",
+      "ci-perf-report.json",
+    );
     fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 
     // Console output

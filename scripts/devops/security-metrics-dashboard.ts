@@ -195,9 +195,9 @@ class SecurityMetricsDashboard {
 	private config: DashboardConfig;
 
 	constructor() {
-		this.metricsDir = path.join(__dirname, '..', 'reports', 'metrics');
-		this.reportsDir = path.join(__dirname, '..', 'reports', 'security');
-		this.dashboardDir = path.join(__dirname, '..', 'reports', 'dashboard');
+		this.metricsDir = path.join(process.cwd(), 'reports', 'metrics');
+		this.reportsDir = path.join(process.cwd(), 'reports', 'security');
+		this.dashboardDir = path.join(process.cwd(), 'reports', 'dashboard');
 		this.config = this.loadConfiguration();
 	}
 
@@ -314,7 +314,7 @@ class SecurityMetricsDashboard {
 	 */
 	private loadIncidentsData(): Incident[] {
 		try {
-			const incidentsDir: string = path.join(__dirname, '..', 'reports', 'incidents');
+			const incidentsDir: string = path.join(process.cwd(), 'reports', 'incidents');
 			if (fs.existsSync(incidentsDir)) {
 				const files: string[] = fs.readdirSync(incidentsDir);
 				return files
@@ -334,7 +334,7 @@ class SecurityMetricsDashboard {
 	 */
 	private loadAlertsData(): Alert[] {
 		try {
-			const alertsDir: string = path.join(__dirname, '..', 'reports', 'alerts');
+			const alertsDir: string = path.join(process.cwd(), 'reports', 'alerts');
 			if (fs.existsSync(alertsDir)) {
 				const files: string[] = fs.readdirSync(alertsDir);
 				return files

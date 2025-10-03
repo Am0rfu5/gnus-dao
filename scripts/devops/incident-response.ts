@@ -96,8 +96,8 @@ class IncidentResponseSystem {
 	private incidentCounter: number;
 
 	constructor() {
-		this.incidentsDir = path.join(__dirname, '..', 'reports', 'incidents');
-		this.playbooksDir = path.join(__dirname, '..', 'docs', 'incident-playbooks');
+		this.incidentsDir = path.join(process.cwd(), 'reports', 'incidents');
+		this.playbooksDir = path.join(process.cwd(), 'docs', 'incident-playbooks');
 		this.config = this.loadConfiguration();
 		this.incidentCounter = this.getNextIncidentId();
 	}

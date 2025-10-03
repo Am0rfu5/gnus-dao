@@ -5,10 +5,10 @@
  * Allows bypassing security hooks in emergency situations with proper logging
  */
 
+import { spawnSync } from 'child_process';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
-import { execSync, spawnSync } from 'child_process';
 import * as readline from 'readline';
 
 interface BypassRequest {
@@ -60,7 +60,7 @@ class EmergencyBypassTool {
 	constructor() {
 		this.args = process.argv.slice(2);
 		this.command = this.args[0];
-		this.logDir = path.join(__dirname, '..', 'logs', 'emergency-bypass');
+		this.logDir = path.join(process.cwd(), 'logs', 'emergency-bypass');
 		this.bypassLogFile = path.join(this.logDir, 'emergency-bypass.log');
 		this.options = this.parseOptions();
 	}
@@ -283,7 +283,7 @@ Examples:
 
 		// Rename hook files to disable them
 		HOOKS.forEach((hook) => {
-			const hookPath = path.join(__dirname, '..', '.husky', hook);
+			const hookPath = path.join(process.cwd(), '.husky', hook);
 			const disabledPath = `${hookPath}.disabled`;
 
 			if (fs.existsSync(hookPath)) {
@@ -301,7 +301,7 @@ Examples:
 
 		// Re-enable hook files
 		HOOKS.forEach((hook) => {
-			const hookPath = path.join(__dirname, '..', '.husky', hook);
+			const hookPath = path.join(process.cwd(), '.husky', hook);
 			const disabledPath = `${hookPath}.disabled`;
 
 			if (fs.existsSync(disabledPath)) {
@@ -342,7 +342,7 @@ Examples:
 		// Check hook status
 		console.log('🔍 Hook Status:');
 		HOOKS.forEach((hook) => {
-			const hookPath = path.join(__dirname, '..', '.husky', hook);
+			const hookPath = path.join(process.cwd(), '.husky', hook);
 			const disabledPath = `${hookPath}.disabled`;
 
 			if (fs.existsSync(disabledPath)) {

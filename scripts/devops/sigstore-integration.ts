@@ -94,8 +94,8 @@ class SigstoreIntegration {
 	private sigstoreConfig: SigstoreConfig;
 
 	constructor() {
-		this.buildDir = path.join(__dirname, '..', '..');
-		this.attestationsDir = path.join(__dirname, '..', '..', 'reports', 'attestations');
+		this.buildDir = path.join(process.cwd());
+		this.attestationsDir = path.join(process.cwd(), 'reports', 'attestations');
 		this.sigstoreConfig = this.loadSigstoreConfig();
 	}
 
