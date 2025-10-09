@@ -88,15 +88,6 @@ if (process.argv.includes('coverage')) {
 }
 export const multichainHardhat = multichainTestHardhat;
 
-// Task to print the list of accounts
-task('accounts', 'Prints the list of accounts', async (taskArgs, hre) => {
-	// Retrieve the list of accounts
-	const accounts = await hre.ethers.getSigners();
-	for (const account of accounts) {
-		console.log(account.address);
-	}
-});
-
 const elementSeenSet = new Set<string>();
 // filter out duplicate function signatures
 function genSignature(name: string, inputs: Array<unknown>, type: string): string {
@@ -107,7 +98,6 @@ function genSignature(name: string, inputs: Array<unknown>, type: string): strin
 }
 
 const MOCK_CHAIN_ID = HH_CHAIN_ID ? parseInt(HH_CHAIN_ID) : 31337;
-// console.log(`Using chain ID: ${MOCK_CHAIN_ID}`);
 
 const config: HardhatUserConfig = {
 	typechain: {
