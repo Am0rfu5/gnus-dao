@@ -143,7 +143,8 @@ SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/YOUR_KEY
 # API Keys
 INFURA_PROJECT_ID=your_infura_project_id
 ETHERSCAN_API_KEY=your_etherscan_key
-SNYK_TOKEN=your_snyk_token
+SNYK_TOKEN=your_snyk_token # or use `snyk auth`
+SOCKET_CLI_API_TOKEN=your_socket_token
 
 # Development settings
 NODE_ENV=development
